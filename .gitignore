@@ -1,3 +1,7 @@
+# ⚠️ 注意：.gitignore 不支持「行内注释」——# 只有在行首才是注释，
+#    写在模式后面的 # 会被当作模式的一部分，导致该条规则失效（曾因此把
+#    public/uploads、public/h5 误提交进仓库）。注释一律独立成行。
+
 # ---------- Composer 依赖 ----------
 /vendor/
 
@@ -5,21 +9,26 @@
 /runtime/
 
 # ---------- 环境变量与密钥（绝不入库） ----------
+# 可入库的模板：.env.example / .env.clean
 /.env
 /.env.local
 /.env.*.local
-# 以下为可入库的模板：.env.example / .env.clean
 
-# ---------- 构建产物 / 运行时上传内容 ----------
-/public/h5/        # 前端构建产物（由 front 构建后拷贝进 public/h5，不入库）
-/public/uploads/    # 用户上传的音频/头像/配图/导出，运行时生成
+# ---------- 前端构建产物（由 front 构建后拷贝进 public/h5，不入库） ----------
+/public/h5/
 
-# ---------- 调试残留（垃圾文件，部署前已清理） ----------
+# ---------- 运行时上传内容（音频/头像/配图/导出，运行时生成） ----------
+/public/uploads/
+
+# ---------- 调试 / 测试残留 ----------
 dbg_*.html
 init_err.html
 login_err.html
 pv.html
 srv*.log
+screenshots/
+e2e_test.py
+admin_e2e_test.py
 
 # ---------- 日志 ----------
 *.log
@@ -30,7 +39,7 @@ srv*.log
 .DS_Store
 Thumbs.db
 
-# ---------- Composer 二进制（安装时自带，不入库） ----------
+# ---------- Composer 二进制 / 开发说明 ----------
 composer.phar
 ADMIN_BACKEND_FIX.md
 ADMIN_FRONTEND_FIX.md
