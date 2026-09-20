@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <title>回忆录后台 · 登录</title>
+    <meta name="renderer" content="webkit">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+    <link rel="stylesheet" href="/static/plugs/layui-v2.5.6/css/layui.css" media="all">
+    <link rel="stylesheet" href="/static/plugs/font-awesome-4.7.0/css/font-awesome.min.css" media="all">
+    <link rel="stylesheet" href="/static/admin/css/login.css" media="all">
+    <script src="/static/plugs/layui-v2.5.6/layui.all.js"></script>
+</head>
+<body>
+<div class="main-body">
+    <div class="login-main">
+        <div class="login-top">
+            <span>回忆录后台管理系统</span>
+            <span class="bg1"></span>
+            <span class="bg2"></span>
+        </div>
+        <form class="layui-form login-bottom" lay-filter="loginForm">
+            <div class="demo">默认账号：admin &nbsp;密码：admin888</div>
+            <div class="center">
+                <div class="item">
+                    <span class="icon icon-2"></span>
+                    <input type="text" name="username" lay-verify="required" placeholder="请输入登录账号" maxlength="24" autocomplete="off"/>
+                </div>
+                <div class="item">
+                    <span class="icon icon-3"></span>
+                    <input type="password" name="password" lay-verify="required" placeholder="请输入密码" maxlength="20" autocomplete="off">
+                    <span class="bind-password icon icon-4"></span>
+                </div>
+            </div>
+            <div class="tip">
+                <span class="icon-nocheck"></span>
+                <span class="login-tip">保持登录</span>
+                <a href="javascript:" class="forget-password">忘记密码？</a>
+            </div>
+            <div class="layui-form-item" style="text-align:center;width:100%;height:100%;margin:0px;">
+                <button class="login-btn" lay-submit lay-filter="loginSubmit">立即登录</button>
+            </div>
+        </form>
+    </div>
+</div>
+<div class="footer">
+    回忆录系统<span class="padding-5">|</span><a target="_blank" href="https://beian.miit.gov.cn">粤ICP备xxxxxxx号</a>
+</div>
+
+<script>
+layui.use(['form', 'layer'], function () {
+    var $ = layui.$, form = layui.form, layer = layui.layer;
+
+    // 已登录则直接进后台
+    $.getJSON('/admin-api/info', function (res) {
+        if (res && res.code === 0) { top.location.href = '/admin/index.html'; }
+    });
+
+    // 显示 / 隐藏密码
+    $('.bind-password').on('click', function () {
+        if ($(this).hasClass('icon-5')) {
+            $(this).removeClass('icon-5');
+            $("input[name='password']").attr('type', 'password');
+        } else {
+            $(this).addClass('icon-5');
+            $("input[name='password']").attr('type', 'text');
+        }
+    });
+
+    // 保持登录勾选
+    $('.icon-nocheck').on('click', function () {
+        $(this).toggleClass('icon-check');
+    });
+    $('.login-tip').on('click', function () {
+        $('.icon-nocheck').click();
+    });
+
+    form.on('submit(loginSubmit)', function (obj) {
+        var field = obj.field;
+        field.keep_login = $('.icon-nocheck').hasClass('icon-check') ? 1 : 0;
+        $.ajax({
+            url: '/admin-api/login',
+            type: 'POST',
+            data: field,
+            dataType: 'json',
+            success: function (res) {
+                if (res && res.code === 0) {
+                    layer.msg(res.msg || '登录成功', { icon: 1 });
+                    setTimeout(function () { top.location.href = '/admin/index.html'; }, 600);
+                } else {
+                    layer.msg((res && res.msg) || '登录失败');
+                }
+            },
+            error: function () { layer.msg('网络错误'); }
+        });
+        return false;
+    });
+});
+</script>
+</body>
+</html>

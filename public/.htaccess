@@ -1,0 +1,11 @@
+<IfModule mod_rewrite.c>
+  Options +FollowSymlinks -Multiviews
+  RewriteEngine On
+  # 前端 SPA 部署在 /h5/ 子目录，交由其自己的 .htaccess 处理回退；
+  # 若不在根规则里放行，/h5/memoirs/72 会先被改写成 index.php/h5/memoirs/72，
+  # 进 ThinkPHP 后匹配不到路由 → 刷新页面 404。
+  RewriteCond %{REQUEST_URI} !^/h5/
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteRule ^(.*)$ index.php/$1 [QSA,L]
+</IfModule>

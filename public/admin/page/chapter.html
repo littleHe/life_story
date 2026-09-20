@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <title>系统章节</title>
+    <meta name="renderer" content="webkit">
+    <link rel="stylesheet" href="/static/plugs/layui-v2.5.6/css/layui.css" media="all">
+    <link rel="stylesheet" href="/static/plugs/font-awesome-4.7.0/css/font-awesome.min.css" media="all">
+    <link rel="stylesheet" href="/static/admin/css/public.css" media="all">
+    <script src="/static/plugs/layui-v2.5.6/layui.all.js"></script>
+    <script src="/static/plugs/require-2.3.6/require.js"></script>
+    <script src="/static/config-admin.js"></script>
+    <script src="/static/admin/js/common.js"></script>
+</head>
+<body>
+<div class="layuimini-container">
+    <div class="layuimini-main">
+
+        <fieldset class="table-search-fieldset" id="searchFieldset_chapterTable">
+            <legend>条件搜索</legend>
+            <form class="layui-form layui-form-pane form-search" id="searchForm" lay-filter="searchForm">
+                <div class="layui-form-item layui-inline">
+                    <label class="layui-form-label">关键词</label>
+                    <div class="layui-input-inline"><input type="text" name="keyword" placeholder="章节标题" class="layui-input"></div>
+                </div>
+                <div class="layui-form-item layui-inline">
+                    <label class="layui-form-label">状态</label>
+                    <div class="layui-input-inline">
+                        <select name="chapter_status">
+                            <option value="">全部</option>
+                            <option value="EMPTY">未录制</option>
+                            <option value="RECORDED">已录音</option>
+                            <option value="TRANSCRIBED">已转写</option>
+                            <option value="POLISHED">已润色</option>
+                            <option value="DONE">已完成</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="layui-form-item layui-inline">
+                    <label class="layui-form-label">来源</label>
+                    <div class="layui-input-inline">
+                        <select name="source">
+                            <option value="">全部</option>
+                            <option value="SYSTEM">系统预设</option>
+                            <option value="CUSTOM">用户自定义</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="layui-form-item layui-inline">
+                    <button type="submit" class="layui-btn layui-btn-normal" lay-submit lay-filter="search"><i class="fa fa-search"></i> 搜 索</button>
+                    <button type="reset" class="layui-btn layui-btn-primary" id="chapterReset"> 重 置 </button>
+                </div>
+            </form>
+        </fieldset>
+
+        <script type="text/html" id="toolbar">
+            <div class="layui-btn-container">
+                <button class="layui-btn layui-btn-sm layuimini-btn-primary" lay-event="refresh" title="刷新"><i class="fa fa-refresh"></i></button>
+                <button class="layui-btn layui-btn-sm layui-btn-normal" lay-event="add"><i class="fa fa-plus"></i> 添加</button>
+            </div>
+        </script>
+
+        <table id="chapterTable" lay-filter="chapterTable"></table>
+
+        <script type="text/html" id="rowTool">
+            <a class="layui-btn layui-btn-xs" lay-event="detail">明细</a>
+            <a class="layui-btn layui-btn-xs layui-btn-normal" lay-event="edit">编辑</a>
+            <a class="layui-btn layui-btn-xs layui-btn-danger" lay-event="del">删除</a>
+        </script>
+
+        <div id="formBox" style="display:none;padding:20px">
+            <form class="layui-form" lay-filter="chapterForm">
+                <input type="hidden" name="id">
+                <div class="layui-form-item">
+                    <label class="layui-form-label">章节标题</label>
+                    <div class="layui-input-block"><input type="text" name="title" class="layui-input"></div>
+                </div>
+                <div class="layui-form-item">
+                    <label class="layui-form-label">排序</label>
+                    <div class="layui-input-block"><input type="number" name="sort" class="layui-input"></div>
+                </div>
+                <div class="layui-form-item">
+                    <div class="layui-input-block">
+                        <button class="layui-btn" lay-submit lay-filter="chapterSave">保存</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        <div id="detailBox" style="display:none;padding:20px"></div>
+    </div>
+</div>
+
+<script>
+layui.use(['table', 'form', 'layer'], function () {
+    var $ = layui.$, form = layui.form, layer = layui.layer, table = layui.table;
+
+    form.render(); // 渲染搜索区 select 等表单控件（layui 不会自动渲染）
+
+    AdminAPI.table({
+        elem: '#chapterTable',
+        url: '/admin-api/chapter/index',
+        toolbar: '#toolbar',
+        defaultToolbar: ['filter', 'exports', 'print', { title: '搜索', layEvent: 'TABLE_SEARCH', icon: 'layui-icon-search' }],
+        cols: [[
+            { field: 'id', title: 'ID', width: 70 },
+            { field: 'sort', title: '排序', width: 80 },
+            { field: 'title', title: '章节标题', minWidth: 160 },
+            { field: 'source_text', title: '来源', width: 100 },
+            { field: 'chapter_status_text', title: '状态', width: 100, templet: function (d) {
+                return '<span class="layui-badge layui-bg-blue">' + d.chapter_status_text + '</span>';
+            } },
+            { field: 'asset_count', title: '资源数', width: 90, sort: true, templet: function (d) {
+                return '<span class="layui-badge layui-bg-orange">' + (d.asset_count || 0) + '</span>';
+            } },
+            { field: 'created_at', title: '创建时间', width: 160 },
+            { title: '操作', width: 180, templet: '#rowTool', fixed: 'right' }
+        ]]
+    });
+
+    form.on('submit(search)', function (obj) { AdminAPI.reload('#chapterTable', obj.field); return false; });
+    $('#chapterReset').on('click', function () { setTimeout(function () { AdminAPI.reload('#chapterTable', {}); }, 0); });
+
+    table.on('toolbar(chapterTable)', function (obj) {
+        var e = obj.event;
+        if (e === 'refresh') {
+            table.reload('chapterTable');
+        } else if (e === 'TABLE_SEARCH') {
+            $('#searchFieldset_chapterTable').toggleClass('layui-hide');
+        } else if (e === 'add') {
+            // 系统默认章节不归属项目，直接打开表单即可
+            form.val('chapterForm', { id: '', title: '', sort: 0 });
+            AdminAPI.open('添加章节', '500px', 'auto', $('#formBox'));
+        }
+    });
+
+    table.on('tool(chapterTable)', function (obj) {
+        var d = obj.data, event = obj.event;
+        if (event === 'del') {
+            AdminAPI.del('/admin-api/chapter/delete', { id: d.id }, function () { obj.del(); });
+        } else if (event === 'edit') {
+            form.val('chapterForm', { id: d.id, title: d.title, sort: d.sort });
+            AdminAPI.open('编辑章节', '500px', 'auto', $('#formBox'));
+        } else if (event === 'detail') {
+            $.getJSON('/admin-api/chapter/detail?id=' + d.id, function (res) {
+                if (!res || res.code !== 0) return layer.msg('加载失败');
+                var c = res.data.chapter, assets = res.data.assets || [];
+                var html = '<p>标题：' + (c.title || '') + '</p>' +
+                    '<p>状态：' + (c.chapter_status_text || c.chapter_status) + '</p>' +
+                    '<p>来源：' + (c.source === 'SYSTEM' ? '系统预设' : '用户自定义') + '</p>' +
+                    '<hr><p>资源数：' + assets.length + '</p>';
+                $('#detailBox').html(html);
+                AdminAPI.open('章节明细 #' + d.id, '480px', 'auto', $('#detailBox'));
+            });
+        }
+    });
+
+    form.on('submit(chapterSave)', function (obj) {
+        AdminAPI.post('/admin-api/chapter/save', obj.field, function (res) {
+            layer.msg(res.msg || '保存成功');
+            layer.closeAll();
+            table.reload('chapterTable');
+        });
+        return false;
+    });
+});
+</script>
+</body>
+</html>

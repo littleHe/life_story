@@ -1,0 +1,11 @@
+<?php
+namespace think;
+
+// 命令行入口文件
+
+// 加载基础文件
+require __DIR__ . '/vendor/autoload.php';
+
+// 执行命令行应用
+$app = new App();
+$app->console->run();

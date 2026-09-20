@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <title>用户行为 · 接口日志</title>
+    <meta name="renderer" content="webkit">
+    <link rel="stylesheet" href="/static/plugs/layui-v2.5.6/css/layui.css" media="all">
+    <link rel="stylesheet" href="/static/plugs/font-awesome-4.7.0/css/font-awesome.min.css" media="all">
+    <link rel="stylesheet" href="/static/admin/css/public.css" media="all">
+    <script src="/static/plugs/layui-v2.5.6/layui.all.js"></script>
+    <script src="/static/plugs/require-2.3.6/require.js"></script>
+    <script src="/static/config-admin.js"></script>
+    <script src="/static/admin/js/common.js"></script>
+</head>
+<body>
+<div class="layuimini-container">
+    <div class="layuimini-main">
+
+        <fieldset class="table-search-fieldset" id="searchFieldset_logTable">
+            <legend>条件搜索</legend>
+            <form class="layui-form layui-form-pane form-search" id="searchForm" lay-filter="searchForm">
+                <div class="layui-form-item layui-inline">
+                    <label class="layui-form-label">路径</label>
+                    <div class="layui-input-inline"><input type="text" name="keyword" placeholder="接口路径" class="layui-input"></div>
+                </div>
+                <div class="layui-form-item layui-inline">
+                    <label class="layui-form-label">方法</label>
+                    <div class="layui-input-inline">
+                        <select name="method"><option value="">全部</option><option>GET</option><option>POST</option><option>ADMIN</option></select>
+                    </div>
+                </div>
+                <div class="layui-form-item layui-inline">
+                    <button type="submit" class="layui-btn layui-btn-normal" lay-submit lay-filter="search"><i class="fa fa-search"></i> 搜 索</button>
+                    <button type="reset" class="layui-btn layui-btn-primary" id="logReset"> 重 置 </button>
+                </div>
+            </form>
+        </fieldset>
+
+        <script type="text/html" id="toolbar">
+            <div class="layui-btn-container">
+                <button class="layui-btn layui-btn-sm layuimini-btn-primary" lay-event="refresh" title="刷新"><i class="fa fa-refresh"></i></button>
+                <button class="layui-btn layui-btn-sm layui-btn-danger" lay-event="clear"><i class="fa fa-trash"></i> 清空全部</button>
+            </div>
+        </script>
+
+        <div style="color:#888;font-size:12px;margin:6px 0 10px" id="statBox"></div>
+
+        <table id="logTable" lay-filter="logTable"></table>
+
+        <script type="text/html" id="rowTool">
+            <a class="layui-btn layui-btn-xs layui-btn-danger" lay-event="del">删除</a>
+        </script>
+    </div>
+</div>
+
+<script>
+layui.use(['table', 'form', 'layer'], function () {
+    var $ = layui.$, form = layui.form, layer = layui.layer, table = layui.table;
+
+    form.render(); // 渲染搜索区 select 等表单控件（layui 不会自动渲染）
+
+    AdminAPI.table({
+        elem: '#logTable',
+        url: '/admin-api/apilog/index',
+        toolbar: '#toolbar',
+        defaultToolbar: ['filter', 'exports', 'print', { title: '搜索', layEvent: 'TABLE_SEARCH', icon: 'layui-icon-search' }],
+        cols: [[
+            { field: 'id', title: 'ID', width: 70 },
+            { field: 'method', title: '方法', width: 80 },
+            { field: 'path', title: '接口路径', minWidth: 180, templet: function (d) { return '<code>' + d.path + '</code>'; } },
+            { field: 'ip', title: 'IP', width: 130 },
+            { field: 'status_text', title: '状态', width: 90, templet: function (d) {
+                return d.status_code >= 200 && d.status_code < 300
+                    ? '<span class="layui-badge layui-bg-green">成功</span>'
+                    : '<span class="layui-badge layui-bg-red">异常</span>';
+            } },
+            { field: 'duration_text', title: '耗时', width: 100 },
+            { field: 'user_agent', title: 'UA', minWidth: 160 },
+            { field: 'created_at', title: '时间', width: 160 },
+            { title: '操作', width: 90, templet: '#rowTool', fixed: 'right' }
+        ]]
+    });
+
+    form.on('submit(search)', function (obj) { AdminAPI.reload('#logTable', obj.field); return false; });
+    $('#logReset').on('click', function () { setTimeout(function () { AdminAPI.reload('#logTable', {}); }, 0); });
+
+    table.on('toolbar(logTable)', function (obj) {
+        var e = obj.event;
+        if (e === 'refresh') {
+            table.reload('logTable');
+        } else if (e === 'TABLE_SEARCH') {
+            $('#searchFieldset_logTable').toggleClass('layui-hide');
+        } else if (e === 'clear') {
+            layer.confirm('确定清空全部接口日志？', function (index) {
+                layer.close(index);
+                AdminAPI.post('/admin-api/apilog/clear', {}, function (res) {
+                    layer.msg(res.msg || '已清空');
+                    table.reload('logTable');
+                    loadStat();
+                });
+            });
+        }
+    });
+
+    table.on('tool(logTable)', function (obj) {
+        if (obj.event === 'del') {
+            AdminAPI.del('/admin-api/apilog/delete', { id: obj.data.id }, function () { obj.del(); });
+        }
+    });
+
+    function loadStat() {
+        $.getJSON('/admin-api/apilog/stat', function (res) {
+            if (res && res.code === 0 && res.data) {
+                $('#statBox').text('近24h请求 ' + res.data.last24h + ' · 平均 ' + res.data.avg_ms + 'ms · 异常 ' + res.data.error_24h);
+            }
+        });
+    }
+    loadStat();
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <title>首页幻灯片</title>
+    <meta name="renderer" content="webkit">
+    <link rel="stylesheet" href="/static/plugs/layui-v2.5.6/css/layui.css" media="all">
+    <link rel="stylesheet" href="/static/plugs/font-awesome-4.7.0/css/font-awesome.min.css" media="all">
+    <link rel="stylesheet" href="/static/admin/css/public.css" media="all">
+    <script src="/static/plugs/layui-v2.5.6/layui.all.js"></script>
+    <script src="/static/plugs/require-2.3.6/require.js"></script>
+    <script src="/static/config-admin.js"></script>
+    <script src="/static/admin/js/common.js"></script>
+</head>
+<body>
+<div class="layuimini-container">
+    <div class="layuimini-main">
+
+        <script type="text/html" id="toolbar">
+            <div class="layui-btn-container">
+                <button class="layui-btn layui-btn-sm layuimini-btn-primary" lay-event="refresh" title="刷新"><i class="fa fa-refresh"></i></button>
+                <button class="layui-btn layui-btn-sm layui-btn-normal" lay-event="add"><i class="fa fa-plus"></i> 添加幻灯片</button>
+            </div>
+        </script>
+
+        <table id="slideTable" lay-filter="slideTable"></table>
+
+        <script type="text/html" id="rowTool">
+            <a class="layui-btn layui-btn-xs layui-btn-normal" lay-event="edit">编辑</a>
+            <a class="layui-btn layui-btn-xs layui-btn-danger" lay-event="del">删除</a>
+        </script>
+
+        <div id="formBox" style="display:none;padding:20px">
+            <form class="layui-form" lay-filter="slideForm">
+                <input type="hidden" name="id">
+                <div class="layui-form-item">
+                    <label class="layui-form-label">标题</label>
+                    <div class="layui-input-block"><input type="text" name="title" class="layui-input"></div>
+                </div>
+                <div class="layui-form-item">
+                    <label class="layui-form-label">图片</label>
+                    <div class="layui-input-block">
+                        <input type="hidden" name="image" id="imageInput">
+                        <div id="uploadBtn" class="layui-btn layui-btn-sm"><i class="fa fa-upload"></i> 上传图片</div>
+                        <div id="imgPreview" style="margin-top:8px"></div>
+                    </div>
+                </div>
+                <div class="layui-form-item">
+                    <label class="layui-form-label">跳转链接</label>
+                    <div class="layui-input-block"><input type="text" name="link" placeholder="选填，如 /#/project/1" class="layui-input"></div>
+                </div>
+                <div class="layui-form-item">
+                    <label class="layui-form-label">排序</label>
+                    <div class="layui-input-inline"><input type="number" name="sort" class="layui-input"></div>
+                    <div class="layui-form-mid">数字越大越靠前</div>
+                </div>
+                <div class="layui-form-item">
+                    <label class="layui-form-label">状态</label>
+                    <div class="layui-input-block">
+                        <input type="radio" name="status" value="1" title="启用" checked>
+                        <input type="radio" name="status" value="0" title="停用">
+                    </div>
+                </div>
+                <div class="layui-form-item">
+                    <div class="layui-input-block"><button class="layui-btn" lay-submit lay-filter="slideSave">保存</button></div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+layui.use(['table', 'form', 'layer', 'upload'], function () {
+    var $ = layui.$, form = layui.form, layer = layui.layer, table = layui.table, upload = layui.upload;
+
+    form.render(); // 渲染表单控件（layui 不会自动渲染）
+
+    AdminAPI.table({
+        elem: '#slideTable',
+        url: '/admin-api/slide/index',
+        toolbar: '#toolbar',
+        cols: [[
+            { field: 'id', title: 'ID', width: 70 },
+            { field: 'title', title: '标题', width: 180 },
+            { field: 'image', title: '图片', width: 120, templet: function (d) {
+                return d.image ? '<img src="' + d.image + '" style="height:40px;border-radius:3px">' : '-';
+            } },
+            { field: 'link', title: '链接', minWidth: 140, templet: function (d) { return d.link || '-'; } },
+            { field: 'sort', title: '排序', width: 80 },
+            { field: 'status', title: '状态', width: 90, templet: function (d) {
+                return d.status == 1 ? '<span class="layui-badge layui-bg-blue">启用</span>' : '<span class="layui-badge">停用</span>';
+            } },
+            { title: '操作', width: 140, templet: '#rowTool', fixed: 'right' }
+        ]]
+    });
+
+    table.on('toolbar(slideTable)', function (obj) {
+        var e = obj.event;
+        if (e === 'refresh') {
+            table.reload('slideTable');
+        } else if (e === 'add') {
+            form.val('slideForm', { id: '', title: '', image: '', link: '', sort: 0, status: 1 });
+            renderPreview('');
+            AdminAPI.open('添加幻灯片', '520px', 'auto', $('#formBox'));
+        }
+    });
+
+    table.on('tool(slideTable)', function (obj) {
+        var d = obj.data, e = obj.event;
+        if (e === 'del') {
+            AdminAPI.del('/admin-api/slide/delete', { id: d.id }, function () { obj.del(); });
+        } else if (e === 'edit') {
+            form.val('slideForm', { id: d.id, title: d.title, image: d.image, link: d.link, sort: d.sort, status: d.status });
+            renderPreview(d.image);
+            AdminAPI.open('编辑幻灯片 #' + d.id, '520px', 'auto', $('#formBox'));
+        }
+    });
+
+    function renderPreview(src) {
+        $('#imgPreview').html(src ? '<img src="' + src + '" style="max-width:200px;border-radius:4px">' : '');
+    }
+
+    upload.render({
+        elem: '#uploadBtn',
+        url: '/admin-api/upload',
+        accept: 'images',
+        done: function (res) {
+            if (res.code === 0 && res.data) {
+                $('#imageInput').val(res.data.url);
+                renderPreview(res.data.url);
+                layer.msg('上传成功');
+            } else {
+                layer.msg(res.msg || '上传失败');
+            }
+        },
+        error: function () { layer.msg('上传出错'); }
+    });
+
+    form.on('submit(slideSave)', function (obj) {
+        if (!obj.field.image) { layer.msg('请先上传图片'); return false; }
+        AdminAPI.post('/admin-api/slide/save', obj.field, function (res) {
+            layer.msg(res.msg || '保存成功');
+            layer.closeAll();
+            table.reload('slideTable');
+        });
+        return false;
+    });
+});
+</script>
+</body>
+</html>

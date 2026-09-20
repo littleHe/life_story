@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <title>菜单管理</title>
+    <meta name="renderer" content="webkit">
+    <link rel="stylesheet" href="/static/plugs/layui-v2.5.6/css/layui.css" media="all">
+    <link rel="stylesheet" href="/static/plugs/font-awesome-4.7.0/css/font-awesome.min.css" media="all">
+    <link rel="stylesheet" href="/static/admin/css/public.css" media="all">
+    <script src="/static/plugs/layui-v2.5.6/layui.all.js"></script>
+    <script src="/static/plugs/require-2.3.6/require.js"></script>
+    <script src="/static/config-admin.js"></script>
+    <script src="/static/admin/js/common.js"></script>
+</head>
+<body>
+<div class="layuimini-container">
+    <div class="layuimini-main">
+
+        <script type="text/html" id="toolbar">
+            <div class="layui-btn-container">
+                <button class="layui-btn layui-btn-sm layuimini-btn-primary" lay-event="refresh" title="刷新"><i class="fa fa-refresh"></i></button>
+                <button class="layui-btn layui-btn-sm layui-btn-normal" lay-event="add"><i class="fa fa-plus"></i> 添加菜单</button>
+            </div>
+        </script>
+
+        <div style="color:#aaa;font-size:12px;margin:6px 0 10px">提示：图标使用 Font Awesome，点击图标框即可从可视化面板选择</div>
+
+        <table id="menuTable" lay-filter="menuTable"></table>
+
+        <script type="text/html" id="rowTool">
+            <a class="layui-btn layui-btn-xs layui-btn-normal" lay-event="edit">编辑</a>
+            <a class="layui-btn layui-btn-xs layui-btn-danger" lay-event="del">删除</a>
+        </script>
+
+        <div id="formBox" style="display:none;padding:20px">
+            <form class="layui-form" lay-filter="menuForm">
+                <input type="hidden" name="id">
+                <div class="layui-form-item">
+                    <label class="layui-form-label">上级菜单</label>
+                    <div class="layui-input-block"><select name="pid" id="pidSelect"><option value="0">顶级菜单</option></select></div>
+                </div>
+                <div class="layui-form-item">
+                    <label class="layui-form-label">菜单名称</label>
+                    <div class="layui-input-block"><input type="text" name="title" lay-verify="required" class="layui-input"></div>
+                </div>
+                <div class="layui-form-item">
+                    <label class="layui-form-label">图标</label>
+                    <div class="layui-input-block">
+                        <input type="text" id="icon" name="icon" lay-filter="iconFilter" class="layui-input" placeholder="点击右侧选择图标" readonly>
+                        <div class="layui-form-mid layui-word-aux">留空则不显示图标</div>
+                    </div>
+                </div>
+                <div class="layui-form-item">
+                    <label class="layui-form-label">页面地址</label>
+                    <div class="layui-input-block"><input type="text" name="href" placeholder="如 /admin/page/chapter.html" class="layui-input"></div>
+                </div>
+                <div class="layui-form-item">
+                    <label class="layui-form-label">打开方式</label>
+                    <div class="layui-input-block">
+                        <select name="target"><option value="_self">当前窗口</option><option value="_blank">新窗口</option></select>
+                    </div>
+                </div>
+                <div class="layui-form-item">
+                    <label class="layui-form-label">排序</label>
+                    <div class="layui-input-inline"><input type="number" name="sort" class="layui-input"></div>
+                </div>
+                <div class="layui-form-item">
+                    <label class="layui-form-label">状态</label>
+                    <div class="layui-input-block">
+                        <input type="radio" name="status" value="1" title="显示" checked>
+                        <input type="radio" name="status" value="0" title="隐藏">
+                    </div>
+                </div>
+                <div class="layui-form-item">
+                    <label class="layui-form-label">备注</label>
+                    <div class="layui-input-block"><input type="text" name="remark" class="layui-input"></div>
+                </div>
+                <div class="layui-form-item">
+                    <div class="layui-input-block"><button class="layui-btn" lay-submit lay-filter="menuSave">保存</button></div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+layui.config({ base: '/static/plugs/lay-module/iconPicker/' });
+layui.use(['table', 'form', 'layer', 'iconPickerFa'], function () {
+    var $ = layui.$, form = layui.form, layer = layui.layer, table = layui.table;
+    var iconPickerFa = layui.iconPickerFa;
+
+    form.render(); // 渲染表单控件（layui 不会自动渲染）
+
+    var iconLess = (window.PATH_CONFIG && PATH_CONFIG.iconLess)
+        ? PATH_CONFIG.iconLess
+        : '/static/plugs/font-awesome-4.7.0/less/variables.less';
+
+    // 初始化图标选择器（表单常驻 DOM，只需渲染一次）
+    iconPickerFa.render({
+        elem: '#icon',
+        url: iconLess,
+        limit: 12,
+        search: true,
+        click: function (data) {
+            $('#icon').val('fa ' + data.icon);
+        },
+        success: function (d) { /* 渲染完成 */ }
+    });
+
+    // 设置图标预览格里的 <i>
+    // 说明：iconPickerFa.checkIcon 内部执行 p.attr('class', 'fa ' + c)，
+    // 而我们的图标值格式是完整的 'fa fa-book'，直接传会导致 class 变成 'fa fa fa-book'（重复 fa）。
+    // 这里在回显后把预览 class 纠正为完整可用的 Font Awesome class。
+    function setIconPreview(icon) {
+        $('#icon').next().find('.layui-iconpicker-item .fa').attr('class', icon || 'fa');
+    }
+
+    function loadOptions(selectedPid) {
+        $.getJSON('/admin-api/menu/options', function (res) {
+            if (res && res.code === 0) {
+                var html = '<option value="0">顶级菜单</option>';
+                (res.data.options || []).forEach(function (o) {
+                    html += '<option value="' + o.id + '">' + o.title + '</option>';
+                });
+                $('#pidSelect').html(html);
+                if (selectedPid !== undefined) { $('#pidSelect').val(selectedPid); }
+                form.render('select');
+            }
+        });
+    }
+    loadOptions();
+
+    AdminAPI.table({
+        elem: '#menuTable',
+        url: '/admin-api/menu/index',
+        toolbar: '#toolbar',
+        cols: [[
+            { field: 'id', title: 'ID', width: 70 },
+            { field: 'parent_title', title: '上级', width: 110 },
+            { field: 'icon', title: '图标', width: 80, templet: function (d) {
+                return d.icon ? '<i class="' + d.icon + '" style="font-size:16px;color:#1e9fff"></i>' : '-';
+            } },
+            { field: 'title', title: '菜单名称', width: 150 },
+            { field: 'href', title: '页面地址', minWidth: 160, templet: function (d) { return d.href || '-'; } },
+            { field: 'sort', title: '排序', width: 80 },
+            { field: 'status', title: '状态', width: 90, templet: function (d) {
+                return d.status == 1 ? '<span class="layui-badge layui-bg-blue">显示</span>' : '<span class="layui-badge">隐藏</span>';
+            } },
+            { title: '操作', width: 140, templet: '#rowTool', fixed: 'right' }
+        ]]
+    });
+
+    table.on('toolbar(menuTable)', function (obj) {
+        var e = obj.event;
+        if (e === 'refresh') {
+            table.reload('menuTable');
+        } else if (e === 'add') {
+            form.val('menuForm', { id: '', pid: 0, title: '', icon: '', href: '', target: '_self', sort: 0, status: 1, remark: '' });
+            loadOptions(0);
+            $('#icon').val('');
+            setIconPreview('');
+            AdminAPI.open('添加菜单', '560px', 'auto', $('#formBox'));
+        }
+    });
+
+    table.on('tool(menuTable)', function (obj) {
+        var d = obj.data, e = obj.event;
+        if (e === 'del') {
+            AdminAPI.del('/admin-api/menu/delete', { id: d.id }, function () { obj.del(); });
+        } else if (e === 'edit') {
+            form.val('menuForm', {
+                id: d.id, pid: d.pid, title: d.title, icon: d.icon, href: d.href,
+                target: d.target || '_self', sort: d.sort, status: d.status, remark: d.remark
+            });
+            loadOptions(d.pid);
+            if (d.icon) {
+                iconPickerFa.checkIcon('iconFilter', d.icon);
+                setIconPreview(d.icon);
+            } else {
+                $('#icon').val('');
+                setIconPreview('');
+            }
+            AdminAPI.open('编辑菜单 #' + d.id, '560px', 'auto', $('#formBox'));
+        }
+    });
+
+    form.on('submit(menuSave)', function (obj) {
+        AdminAPI.post('/admin-api/menu/save', obj.field, function (res) {
+            layer.msg(res.msg || '保存成功');
+            layer.closeAll();
+            table.reload('menuTable');
+        });
+        return false;
+    });
+});
+</script>
+</body>
+</html>

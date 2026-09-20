@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <title>控制台</title>
+    <meta name="renderer" content="webkit">
+    <link rel="stylesheet" href="/static/plugs/layui-v2.5.6/css/layui.css" media="all">
+    <link rel="stylesheet" href="/static/plugs/font-awesome-4.7.0/css/font-awesome.min.css" media="all">
+    <link rel="stylesheet" href="/static/admin/css/public.css" media="all">
+    <link rel="stylesheet" href="/static/admin/css/welcome.css" media="all">
+    <script src="/static/plugs/layui-v2.5.6/layui.all.js"></script>
+    <style>
+        /* 「最新创建项目」位于窄栏卡片内：固定表格布局 + 单行省略，避免表头/单元格逐字折行 */
+        #projTable {table-layout: fixed; margin-bottom: 0;}
+        #projTable th, #projTable td {padding: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;}
+    </style>
+</head>
+<body>
+<div class="layuimini-container">
+    <div class="layuimini-main">
+        <div class="layui-row layui-col-space15">
+            <div class="layui-col-md8">
+                <div class="layui-row layui-col-space15">
+                    <!-- 数据统计 -->
+                    <div class="layui-col-md6">
+                        <div class="layui-card">
+                            <div class="layui-card-header"><i class="fa fa-warning icon"></i>数据统计</div>
+                            <div class="layui-card-body">
+                                <div class="welcome-module">
+                                    <div class="layui-row layui-col-space10" id="statPanels"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- 快捷入口 -->
+                    <div class="layui-col-md6">
+                        <div class="layui-card">
+                            <div class="layui-card-header"><i class="fa fa-credit-card icon icon-blue"></i>快捷入口</div>
+                            <div class="layui-card-body">
+                                <div class="welcome-module">
+                                    <div class="layui-row layui-col-space10 layuimini-qiuck">
+                                        <div class="layui-col-xs3 layuimini-qiuck-module">
+                                            <a layuimini-content-href="/admin/page/chapter.html" data-title="系统章节">
+                                                <i class="fa fa-book"></i><cite>系统章节</cite>
+                                            </a>
+                                        </div>
+                                        <div class="layui-col-xs3 layuimini-qiuck-module">
+                                            <a layuimini-content-href="/admin/page/user.html" data-title="授权用户">
+                                                <i class="fa fa-user"></i><cite>授权用户</cite>
+                                            </a>
+                                        </div>
+                                        <div class="layui-col-xs3 layuimini-qiuck-module">
+                                            <a layuimini-content-href="/admin/page/code.html" data-title="兑换码">
+                                                <i class="fa fa-key"></i><cite>兑换码</cite>
+                                            </a>
+                                        </div>
+                                        <div class="layui-col-xs3 layuimini-qiuck-module">
+                                            <a layuimini-content-href="/admin/page/slide.html" data-title="首页幻灯片">
+                                                <i class="fa fa-image"></i><cite>幻灯片</cite>
+                                            </a>
+                                        </div>
+                                        <div class="layui-col-xs3 layuimini-qiuck-module">
+                                            <a layuimini-content-href="/admin/page/apilog.html" data-title="接口日志">
+                                                <i class="fa fa-file-text-o"></i><cite>接口日志</cite>
+                                            </a>
+                                        </div>
+                                        <div class="layui-col-xs3 layuimini-qiuck-module">
+                                            <a layuimini-content-href="/admin/page/codelog.html" data-title="兑换码日志">
+                                                <i class="fa fa-history"></i><cite>核销日志</cite>
+                                            </a>
+                                        </div>
+                                        <div class="layui-col-xs3 layuimini-qiuck-module">
+                                            <a layuimini-content-href="/admin/page/adminuser.html" data-title="管理员">
+                                                <i class="fa fa-user-secret"></i><cite>管理员</cite>
+                                            </a>
+                                        </div>
+                                        <div class="layui-col-xs3 layuimini-qiuck-module">
+                                            <a layuimini-content-href="/admin/page/menu.html" data-title="菜单管理">
+                                                <i class="fa fa-bars"></i><cite>菜单管理</cite>
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- 报表统计 -->
+                    <div class="layui-col-md12">
+                        <div class="layui-card">
+                            <div class="layui-card-header"><i class="fa fa-line-chart icon"></i>报表统计</div>
+                            <div class="layui-card-body">
+                                <div style="font-size:13px;color:#666;margin-bottom:8px;"><i class="fa fa-calendar"></i> 近 7 天创建趋势（用户 / 项目 / 章节）</div>
+                                <div id="trend"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="layui-col-md4">
+                <!-- 系统公告 -->
+                <div class="layui-card">
+                    <div class="layui-card-header"><i class="fa fa-bullhorn icon icon-tip"></i>系统公告</div>
+                    <div class="layui-card-body layui-text">
+                        <div class="layuimini-notice">
+                            <div class="layuimini-notice-title">回忆录系统 v1.0 已上线</div>
+                            <div class="layuimini-notice-extra">新</div>
+                            <div class="layuimini-notice-content layui-hide">支持微信登录、兑换码解锁、自定义章节与 AI 配图。</div>
+                        </div>
+                        <div class="layuimini-notice">
+                            <div class="layuimini-notice-title">章节与项目数据已接入控制台</div>
+                            <div class="layuimini-notice-extra">提示</div>
+                        </div>
+                    </div>
+                </div>
+                <!-- 版本信息 -->
+                <div class="layui-card">
+                    <div class="layui-card-header"><i class="fa fa-fire icon"></i>版本信息</div>
+                    <div class="layui-card-body layui-text">
+                        <table class="layui-table">
+                            <colgroup><col width="100"><col></colgroup>
+                            <tbody>
+                                <tr><td>系统名称</td><td>回忆录系统</td></tr>
+                                <tr><td>当前版本</td><td>v1.0.0</td></tr>
+                                <tr><td>后端</td><td>ThinkPHP 6 + EasyAdmin</td></tr>
+                                <tr><td>前端</td><td>layuimini + Vue3</td></tr>
+                                <tr><td>AI 能力</td><td>云端 HTTP 接口</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <!-- 最新创建项目 -->
+                <div class="layui-card">
+                    <div class="layui-card-header"><i class="fa fa-list icon icon-blue"></i>最新创建项目</div>
+                    <div class="layui-card-body">
+                        <table class="layui-table" lay-skin="line" id="projTable">
+                            <colgroup><col><col width="56"><col width="70"><col width="62"></colgroup>
+                            <thead><tr><th>项目</th><th>姓名</th><th>状态</th><th>时间</th></tr></thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+                <!-- 作者心语 -->
+                <div class="layui-card">
+                    <div class="layui-card-header"><i class="fa fa-paper-plane-o icon"></i>关于本系统</div>
+                    <div class="layui-card-body layui-text layadmin-text">
+                        <p>本系统基于 ThinkPHP 6、layui 2.5.6 以及 font-awesome-4.7.0 实现，用于个人回忆录的编写、配图与分享。</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+layui.use(['layer'], function () {
+    var $ = layui.$, layer = layui.layer;
+
+    function statText(s) {
+        return '<span class="layui-badge ' + (s === 'EDITABLE' ? 'layui-bg-blue' : (s === 'UNPAID_LOCKED' ? 'layui-bg-orange' : 'layui-bg-gray')) + '">' +
+            (s === 'EDITABLE' ? '编辑中' : (s === 'UNPAID_LOCKED' ? '待付费锁' : (s === 'DONE' ? '已完成' : s))) + '</span>';
+    }
+
+    // 文本转义：项目名/姓名来自用户输入，插入 DOM 前必须转义
+    function esc(s) {
+        return String(s === null || s === undefined ? '' : s).replace(/[&<>"']/g, function (c) {
+            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+        });
+    }
+
+    // 快捷入口桥接：本页以 iframe 形式嵌在父级 layuimini 框架内，而 miniTab.listen 的点击代理只绑在
+    // 父文档 body 上，捕获不到 iframe 内的点击。这里在 iframe 文档内自行转发到父级 miniTab，
+    // 使 [layuimini-content-href] 链接能在父级正确打开新标签页（对齐框架设计意图）。
+    $(document).on('click', '[layuimini-content-href]', function (e) {
+        e.preventDefault();
+        var $a = $(this);
+        var href = $a.attr('layuimini-content-href');
+        var title = $a.attr('data-title') || $.trim($a.text());
+        if (window.parent && window.parent.layui && window.parent.layui.miniTab) {
+            window.parent.layui.miniTab.openNewTabByIframe({ href: href, title: title });
+        }
+        return false;
+    });
+
+    $.getJSON('/admin-api/stat', function (res) {
+        if (!res || res.code !== 0) { layer.msg('加载失败'); return; }
+        var d = res.data, o = d.overview || {};
+
+        // 数据统计四宫格
+        var panels = [
+            { title: '用户统计', num: o.user_total || 0,  sub: '今日新增 ' + (o.user_today || 0),       color: 'layui-bg-blue' },
+            { title: '项目统计', num: o.project_total || 0, sub: '编辑中 ' + (o.project_editable || 0) + ' / 锁定 ' + (o.project_locked || 0), color: 'layui-bg-cyan' },
+            { title: '章节统计', num: o.chapter_total || 0, sub: '今日新增 ' + (o.chapter_today || 0),    color: 'layui-bg-orange' },
+            { title: '兑换码',   num: o.code_total || 0,   sub: '已绑定 ' + (o.code_bound || 0),          color: 'layui-bg-green' }
+        ];
+        $('#statPanels').html(panels.map(function (p) {
+            return '<div class="layui-col-xs6"><div class="panel layui-bg-number"><div class="panel-body">' +
+                '<div class="panel-title"><span class="label pull-right ' + p.color + '">实时</span><h5>' + p.title + '</h5></div>' +
+                '<div class="panel-content"><h1 class="no-margins">' + p.num + '</h1><small>' + p.sub + '</small></div>' +
+                '</div></div></div>';
+        }).join(''));
+
+        // 近 7 天趋势
+        var week = d.week || [];
+        if (!week.length) {
+            $('#trend').html('<div style="color:#aaa;font-size:12px;">暂无数据</div>');
+        } else {
+            var rows = week.map(function (w) {
+                return '<tr><td>' + (w.date || '') + '</td><td>' + (w.user || 0) + '</td><td>' + (w.project || 0) + '</td><td>' + (w.chapter || 0) + '</td></tr>';
+            }).join('');
+            $('#trend').html('<table class="layui-table" lay-skin="line" style="margin:0">' +
+                '<thead><tr><th>日期</th><th>用户</th><th>项目</th><th>章节</th></tr></thead><tbody>' + rows + '</tbody></table>');
+        }
+
+        // 最新创建项目（窄栏卡片：日期精简为 MM-DD，完整值放 title 悬浮查看）
+        var rows2 = (d.latestProjects || []).map(function (p) {
+            var createdAt = String(p.created_at || '');
+            var dateShort = createdAt.length >= 10 ? createdAt.slice(5, 10) : createdAt;
+            return '<tr>' +
+                '<td title="' + esc(p.name) + '">' + esc(p.name) + '</td>' +
+                '<td title="' + esc(p.real_name) + '">' + esc(p.real_name) + '</td>' +
+                '<td>' + statText(p.status) + '</td>' +
+                '<td title="' + esc(createdAt) + '">' + esc(dateShort) + '</td></tr>';
+        }).join('');
+        $('#projTable tbody').html(rows2 || '<tr><td colspan="4" style="text-align:center;color:#aaa">暂无数据</td></tr>');
+    }).fail(function () { layer.msg('网络错误'); });
+});
+</script>
+</body>
+</html>

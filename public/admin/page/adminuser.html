@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <title>管理员</title>
+    <meta name="renderer" content="webkit">
+    <link rel="stylesheet" href="/static/plugs/layui-v2.5.6/css/layui.css" media="all">
+    <link rel="stylesheet" href="/static/plugs/font-awesome-4.7.0/css/font-awesome.min.css" media="all">
+    <link rel="stylesheet" href="/static/admin/css/public.css" media="all">
+    <script src="/static/plugs/layui-v2.5.6/layui.all.js"></script>
+    <script src="/static/plugs/require-2.3.6/require.js"></script>
+    <script src="/static/config-admin.js"></script>
+    <script src="/static/admin/js/common.js"></script>
+</head>
+<body>
+<div class="layuimini-container">
+    <div class="layuimini-main">
+
+        <fieldset class="table-search-fieldset" id="searchFieldset_adminTable">
+            <legend>条件搜索</legend>
+            <form class="layui-form layui-form-pane form-search" id="searchForm" lay-filter="searchForm">
+                <div class="layui-form-item layui-inline">
+                    <label class="layui-form-label">关键词</label>
+                    <div class="layui-input-inline"><input type="text" name="keyword" placeholder="账号/昵称" class="layui-input"></div>
+                </div>
+                <div class="layui-form-item layui-inline">
+                    <button type="submit" class="layui-btn layui-btn-normal" lay-submit lay-filter="search"><i class="fa fa-search"></i> 搜 索</button>
+                    <button type="reset" class="layui-btn layui-btn-primary" id="adminReset"> 重 置 </button>
+                </div>
+            </form>
+        </fieldset>
+
+        <script type="text/html" id="toolbar">
+            <div class="layui-btn-container">
+                <button class="layui-btn layui-btn-sm layuimini-btn-primary" lay-event="refresh" title="刷新"><i class="fa fa-refresh"></i></button>
+                <button class="layui-btn layui-btn-sm layui-btn-normal" lay-event="add"><i class="fa fa-plus"></i> 添加管理员</button>
+            </div>
+        </script>
+
+        <table id="adminTable" lay-filter="adminTable"></table>
+
+        <script type="text/html" id="rowTool">
+            <a class="layui-btn layui-btn-xs layui-btn-normal" lay-event="edit">编辑</a>
+            <a class="layui-btn layui-btn-xs layui-btn-danger" lay-event="del">删除</a>
+        </script>
+
+        <div id="formBox" style="display:none;padding:20px">
+            <form class="layui-form" lay-filter="adminForm">
+                <input type="hidden" name="id">
+                <div class="layui-form-item">
+                    <label class="layui-form-label">登录账号</label>
+                    <div class="layui-input-block"><input type="text" name="username" lay-verify="required" class="layui-input"></div>
+                </div>
+                <div class="layui-form-item">
+                    <label class="layui-form-label">密码</label>
+                    <div class="layui-input-block">
+                        <input type="password" name="password" class="layui-input" placeholder="新增必填；编辑留空则不修改">
+                    </div>
+                </div>
+                <div class="layui-form-item">
+                    <label class="layui-form-label">昵称</label>
+                    <div class="layui-input-block"><input type="text" name="nickname" class="layui-input"></div>
+                </div>
+                <div class="layui-form-item">
+                    <label class="layui-form-label">状态</label>
+                    <div class="layui-input-block">
+                        <input type="radio" name="status" value="1" title="启用" checked>
+                        <input type="radio" name="status" value="0" title="禁用">
+                    </div>
+                </div>
+                <div class="layui-form-item">
+                    <label class="layui-form-label">备注</label>
+                    <div class="layui-input-block"><input type="text" name="remark" class="layui-input"></div>
+                </div>
+                <div class="layui-form-item">
+                    <div class="layui-input-block"><button class="layui-btn" lay-submit lay-filter="adminSave">保存</button></div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+layui.use(['table', 'form', 'layer'], function () {
+    var $ = layui.$, form = layui.form, layer = layui.layer, table = layui.table;
+
+    form.render(); // 渲染表单控件（layui 不会自动渲染）
+
+    AdminAPI.table({
+        elem: '#adminTable',
+        url: '/admin-api/adminuser/index',
+        toolbar: '#toolbar',
+        defaultToolbar: ['filter', 'exports', 'print', { title: '搜索', layEvent: 'TABLE_SEARCH', icon: 'layui-icon-search' }],
+        cols: [[
+            { field: 'id', title: 'ID', width: 70 },
+            { field: 'username', title: '账号', width: 140 },
+            { field: 'nickname', title: '昵称', width: 140 },
+            { field: 'status', title: '状态', width: 90, templet: function (d) {
+                return d.status == 1 ? '<span class="layui-badge layui-bg-blue">启用</span>' : '<span class="layui-badge">禁用</span>';
+            } },
+            { field: 'login_num', title: '登录次数', width: 100 },
+            { field: 'last_login_at', title: '最后登录', width: 160, templet: function (d) { return d.last_login_at || '-'; } },
+            { field: 'remark', title: '备注', minWidth: 120 },
+            { title: '操作', width: 140, templet: '#rowTool', fixed: 'right' }
+        ]]
+    });
+
+    form.on('submit(search)', function (obj) { AdminAPI.reload('#adminTable', obj.field); return false; });
+    $('#adminReset').on('click', function () { setTimeout(function () { AdminAPI.reload('#adminTable', {}); }, 0); });
+
+    table.on('toolbar(adminTable)', function (obj) {
+        var e = obj.event;
+        if (e === 'refresh') {
+            table.reload('adminTable');
+        } else if (e === 'TABLE_SEARCH') {
+            $('#searchFieldset_adminTable').toggleClass('layui-hide');
+        } else if (e === 'add') {
+            form.val('adminForm', { id: '', username: '', password: '', nickname: '', status: 1, remark: '' });
+            AdminAPI.open('添加管理员', '480px', 'auto', $('#formBox'));
+        }
+    });
+
+    table.on('tool(adminTable)', function (obj) {
+        var d = obj.data, e = obj.event;
+        if (e === 'del') {
+            AdminAPI.del('/admin-api/adminuser/delete', { id: d.id }, function () { obj.del(); });
+        } else if (e === 'edit') {
+            form.val('adminForm', { id: d.id, username: d.username, password: '', nickname: d.nickname, status: d.status, remark: d.remark });
+            AdminAPI.open('编辑管理员 #' + d.id, '480px', 'auto', $('#formBox'));
+        }
+    });
+
+    form.on('submit(adminSave)', function (obj) {
+        if (!obj.field.id && !obj.field.password) { layer.msg('新增管理员必须填写密码'); return false; }
+        AdminAPI.post('/admin-api/adminuser/save', obj.field, function (res) {
+            layer.msg(res.msg || '保存成功');
+            layer.closeAll();
+            table.reload('adminTable');
+        });
+        return false;
+    });
+});
+</script>
+</body>
+</html>

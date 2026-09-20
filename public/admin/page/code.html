@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <title>兑换码管理</title>
+    <meta name="renderer" content="webkit">
+    <link rel="stylesheet" href="/static/plugs/layui-v2.5.6/css/layui.css" media="all">
+    <link rel="stylesheet" href="/static/plugs/font-awesome-4.7.0/css/font-awesome.min.css" media="all">
+    <link rel="stylesheet" href="/static/admin/css/public.css" media="all">
+    <script src="/static/plugs/layui-v2.5.6/layui.all.js"></script>
+    <script src="/static/plugs/require-2.3.6/require.js"></script>
+    <script src="/static/config-admin.js"></script>
+    <script src="/static/admin/js/common.js"></script>
+</head>
+<body>
+<div class="layuimini-container">
+    <div class="layuimini-main">
+
+        <fieldset class="table-search-fieldset" id="searchFieldset_codeTable">
+            <legend>条件搜索</legend>
+            <form class="layui-form layui-form-pane form-search" id="searchForm" lay-filter="searchForm">
+                <div class="layui-form-item layui-inline">
+                    <label class="layui-form-label">码号</label>
+                    <div class="layui-input-inline"><input type="text" name="keyword" placeholder="兑换码模糊" class="layui-input"></div>
+                </div>
+                <div class="layui-form-item layui-inline">
+                    <label class="layui-form-label">状态</label>
+                    <div class="layui-input-inline">
+                        <select name="status">
+                            <option value="">全部</option>
+                            <option value="GENERATED">已生成</option>
+                            <option value="ADDED">已添加</option>
+                            <option value="BOUND">已绑定</option>
+                            <option value="VOID">已作废</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="layui-form-item layui-inline">
+                    <button type="submit" class="layui-btn layui-btn-normal" lay-submit lay-filter="search"><i class="fa fa-search"></i> 搜 索</button>
+                    <button type="reset" class="layui-btn layui-btn-primary" id="codeReset"> 重 置 </button>
+                </div>
+            </form>
+        </fieldset>
+
+        <script type="text/html" id="toolbar">
+            <div class="layui-btn-container">
+                <button class="layui-btn layui-btn-sm layuimini-btn-primary" lay-event="refresh" title="刷新"><i class="fa fa-refresh"></i></button>
+                <button class="layui-btn layui-btn-sm layui-btn-normal" lay-event="generate"><i class="fa fa-plus"></i> 生成兑换码</button>
+                <button class="layui-btn layui-btn-sm" lay-event="export"><i class="fa fa-download"></i> 导出兑换码</button>
+            </div>
+        </script>
+
+        <table id="codeTable" lay-filter="codeTable"></table>
+
+        <script type="text/html" id="rowTool">
+            <a class="layui-btn layui-btn-xs layui-btn-normal" lay-event="status">改状态</a>
+            <a class="layui-btn layui-btn-xs" lay-event="backfill" title="原文明文仍保留时，校验哈希后加密存档，之后即可导出">回填</a>
+            <a class="layui-btn layui-btn-xs layui-btn-warm" lay-event="reissue" title="明文丢失或客户丢码：重新签发新明文，旧码立即失效">重发新码</a>
+            <a class="layui-btn layui-btn-xs layui-btn-warm" lay-event="void">作废</a>
+            <a class="layui-btn layui-btn-xs layui-btn-danger" lay-event="del">删除</a>
+        </script>
+
+        <div id="genBox" style="display:none;padding:20px">
+            <form class="layui-form" lay-filter="genForm">
+                <div class="layui-form-item">
+                    <label class="layui-form-label">生成数量</label>
+                    <div class="layui-input-block"><input type="number" name="count" value="1" min="1" max="200" class="layui-input"></div>
+                </div>
+                <div class="layui-form-item">
+                    <label class="layui-form-label">最多使用</label>
+                    <div class="layui-input-block"><input type="number" name="max_uses" value="1" min="0" class="layui-input"><div class="layui-form-mid">0 = 不限次</div></div>
+                </div>
+                <div class="layui-form-item">
+                    <div class="layui-input-block"><button class="layui-btn" lay-submit lay-filter="genSave">生成</button></div>
+                </div>
+            </form>
+        </div>
+
+        <div id="statusBox" style="display:none;padding:20px">
+            <form class="layui-form" lay-filter="statusForm">
+                <input type="hidden" name="id">
+                <div class="layui-form-item">
+                    <label class="layui-form-label">新状态</label>
+                    <div class="layui-input-block">
+                        <select name="status">
+                            <option value="GENERATED">已生成</option>
+                            <option value="ADDED">已添加</option>
+                            <option value="BOUND">已绑定</option>
+                            <option value="VOID">已作废</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="layui-form-item">
+                    <label class="layui-form-label">次数上限</label>
+                    <div class="layui-input-block"><input type="number" name="max_uses" min="0" class="layui-input"></div>
+                </div>
+                <div class="layui-form-item">
+                    <div class="layui-input-block"><button class="layui-btn" lay-submit lay-filter="statusSave">保存</button></div>
+                </div>
+            </form>
+        </div>
+
+        <div id="resultBox" style="display:none;padding:20px">
+            <p style="color:#f60;margin-bottom:8px">请立即复制保存，明文仅显示一次：</p>
+            <textarea id="genResult" class="layui-textarea" rows="8" readonly></textarea>
+            <div class="layui-btn-container" style="margin-top:12px">
+                <button type="button" class="layui-btn layui-btn-sm layui-btn-normal" id="btnCopyCodes"><i class="fa fa-copy"></i> 复制全部</button>
+                <button type="button" class="layui-btn layui-btn-sm" id="btnCsvCodes"><i class="fa fa-download"></i> 下载 CSV</button>
+                <button type="button" class="layui-btn layui-btn-sm layui-btn-primary" id="btnPrintCodes"><i class="fa fa-print"></i> 打印</button>
+            </div>
+        </div>
+
+        <div id="backfillBox" style="display:none;padding:20px">
+            <form class="layui-form" lay-filter="backfillForm">
+                <input type="hidden" name="id">
+                <div class="layui-form-item">
+                    <label class="layui-form-label">原始明文</label>
+                    <div class="layui-input-block"><input type="text" name="code" placeholder="请输入该码当初发给客户的明文" class="layui-input" autocomplete="off"></div>
+                </div>
+                <div class="layui-form-item">
+                    <div class="layui-input-block">
+                        <p style="color:#888;line-height:1.7;margin-bottom:10px">系统会先比对 sha256，<b>一致才加密存档</b>；不会改变码的状态与使用次数。</p>
+                        <button class="layui-btn" lay-submit lay-filter="backfillSave"><i class="fa fa-check"></i> 校验并存档</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        <div id="reissueBox" style="display:none;padding:20px">
+            <form class="layui-form" lay-filter="reissueForm">
+                <input type="hidden" name="id">
+                <div class="layui-form-item">
+                    <div class="layui-input-block">
+                        <p style="color:#e6a23c;line-height:1.8">重新签发会生成<b>新的明文</b>，旧明文立即失效（已发出去的旧码将无法再使用）；<br>码的状态、绑定关系与使用次数保持不变。明文只显示这一次。</p>
+                    </div>
+                </div>
+                <div class="layui-form-item">
+                    <div class="layui-input-block">
+                        <button class="layui-btn layui-btn-warm" lay-submit lay-filter="reissueSave"><i class="fa fa-refresh"></i> 确认重发</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        <div id="exportBox" style="display:none;padding:20px">
+            <form class="layui-form" lay-filter="exportForm">
+                <div class="layui-form-item">
+                    <label class="layui-form-label">导出范围</label>
+                    <div class="layui-input-block">
+                        <input type="radio" name="expscope" value="all" title="全部可导出" checked>
+                        <input type="radio" name="expscope" value="unexported" title="仅未导出(增量)">
+                    </div>
+                </div>
+                <div class="layui-form-item">
+                    <label class="layui-form-label">批次号</label>
+                    <div class="layui-input-block"><input type="text" name="expbatch" id="expBatch" placeholder="留空=不限，按批次分组导出" class="layui-input"></div>
+                </div>
+                <div class="layui-form-item">
+                    <label class="layui-form-label">创建日期</label>
+                    <div class="layui-input-inline" style="width:150px"><input type="date" name="expfrom" id="expFrom" class="layui-input"></div>
+                    <div class="layui-form-mid">至</div>
+                    <div class="layui-input-inline" style="width:150px"><input type="date" name="expto" id="expTo" class="layui-input"></div>
+                </div>
+                <div class="layui-form-item">
+                    <div class="layui-input-block">
+                        <button type="button" class="layui-btn" id="btnDoExport"><i class="fa fa-download"></i> 导出 CSV</button>
+                        <span class="layui-form-mid" style="margin-left:8px;color:#888">增量导出会自动标记为已导出</span>
+                    </div>
+                </div>
+                <div class="layui-form-item">
+                    <div class="layui-input-block" style="color:#888;line-height:1.6">
+                        提示：列表中「明文存档 = 无」的历史数据无法还原，不会出现在导出结果里（可先用行内「回填」或「重发新码」补齐）。
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+layui.use(['table', 'form', 'layer'], function () {
+    var $ = layui.$, form = layui.form, layer = layui.layer, table = layui.table;
+
+    form.render(); // 渲染搜索区 select 等表单控件（layui 不会自动渲染）
+
+    AdminAPI.table({
+        elem: '#codeTable',
+        url: '/admin-api/code/index',
+        toolbar: '#toolbar',
+        defaultToolbar: ['filter', 'exports', 'print', { title: '搜索', layEvent: 'TABLE_SEARCH', icon: 'layui-icon-search' }],
+        cols: [[
+            { field: 'id', title: 'ID', width: 70 },
+            { field: 'code_mask', title: '码号', width: 130 },
+            { field: 'status_text', title: '状态', width: 100, templet: function (d) {
+                var c = { GENERATED: 'layui-bg-gray', ADDED: 'layui-bg-blue', BOUND: 'layui-bg-green', VOID: 'layui-bg-red' };
+                return '<span class="layui-badge ' + (c[d.status] || '') + '">' + d.status_text + '</span>';
+            } },
+            { field: 'usage_text', title: '使用', width: 150 },
+            { field: 'cipher_text', title: '明文存档', width: 120, templet: function (d) {
+                return (d.has_cipher == 1)
+                    ? '<span class="layui-badge layui-bg-green">已存档</span>'
+                    : '<span class="layui-badge" title="加密功能上线前的历史数据，只有哈希无法导出">无</span>';
+            } },
+            { field: 'batch_no', title: '批次', width: 150 },
+            { field: 'exported_text', title: '导出状态', width: 180 },
+            { field: 'project_name', title: '绑定项目', width: 150 },
+            { field: 'user_nickname', title: '绑定用户', width: 120 },
+            { field: 'created_at', title: '创建时间', width: 160 },
+            { title: '操作', width: 330, templet: '#rowTool', fixed: 'right' }
+        ]]
+    });
+
+    form.on('submit(search)', function (obj) { AdminAPI.reload('#codeTable', obj.field); return false; });
+    $('#codeReset').on('click', function () { setTimeout(function () { AdminAPI.reload('#codeTable', {}); }, 0); });
+
+    table.on('toolbar(codeTable)', function (obj) {
+        var e = obj.event;
+        if (e === 'refresh') {
+            table.reload('codeTable');
+        } else if (e === 'TABLE_SEARCH') {
+            $('#searchFieldset_codeTable').toggleClass('layui-hide');
+        } else if (e === 'generate') {
+            AdminAPI.open('生成兑换码', '460px', 'auto', $('#genBox'));
+        } else if (e === 'export') {
+            AdminAPI.open('导出兑换码', '520px', 'auto', $('#exportBox'));
+        }
+    });
+
+    // ---- 导出：按条件请求后端解密汇出 CSV（明文已加密存档，可多次/定期汇出） ----
+    // 走 ajax 而非直接 <a download>：只有能读到响应头，才能区分「导出了 N 条 / 跳过了 M 条」，
+    // 不再出现「静默下载到只有表头的空文件」而不知道原因的情况。
+    $('#btnDoExport').on('click', function () {
+        var scope = $('input[name=expscope]:checked').val();
+        var batch = ($('#expBatch').val() || '').trim();
+        var df = ($('#expFrom').val() || '').trim();
+        var dt = ($('#expTo').val() || '').trim();
+        var qs = 'scope=' + encodeURIComponent(scope)
+            + '&batch_no=' + encodeURIComponent(batch)
+            + '&date_from=' + encodeURIComponent(df)
+            + '&date_to=' + encodeURIComponent(dt)
+            + '&mark=1';
+        var $btn = $(this);
+        if ($btn.data('busy')) { return; }
+        $btn.data('busy', 1).addClass('layui-btn-disabled');
+        var loadIdx = layer.load(2);
+        $.ajax({
+            url: '/admin-api/code/export?' + qs,
+            type: 'GET',
+            dataType: 'text',
+            xhrFields: { withCredentials: true },
+            success: function (text, status, xhr) {
+                layer.close(loadIdx);
+                $btn.removeData('busy').removeClass('layui-btn-disabled');
+                var done = parseInt(xhr.getResponseHeader('X-Export-Count') || '0', 10) || 0;
+                var skipped = parseInt(xhr.getResponseHeader('X-Export-Skipped') || '0', 10) || 0;
+                if (done > 0) {
+                    // 服务端已写入 BOM，这里不再重复添加，避免首格出现乱码
+                    saveTextFile(text, 'redemption_codes_' + Date.now() + '.csv');
+                    layer.msg('已导出 ' + done + ' 个兑换码'
+                        + (skipped ? '；另有 ' + skipped + ' 条无明文存档已跳过' : ''),
+                        { icon: skipped ? 0 : 1, time: 2800 });
+                    table.reload('codeTable');
+                } else if (skipped > 0) {
+                    layer.alert('没有可导出的明文。<br><br>命中的 <b>' + skipped + '</b> 条记录都是加密功能上线前的历史数据——'
+                        + '当时只保存了 sha256 哈希、未存档明文，<b>无法反推还原</b>，所以 CSV 只有表头。<br><br>'
+                        + '处理办法：在列表中对「明文存档 = 无」的行点 <b>回填</b>（若原始明文仍在手上，系统会先校验哈希）'
+                        + '或 <b>重发新码</b>（生成新明文，旧码随即失效），之后即可正常导出。',
+                        { title: '导出为空', icon: 0, area: '520px' });
+                } else {
+                    layer.msg('没有符合条件的兑换码', { icon: 0 });
+                }
+            },
+            error: function (xhr) {
+                layer.close(loadIdx);
+                $btn.removeData('busy').removeClass('layui-btn-disabled');
+                if (xhr.status === 401) {
+                    layer.msg('登录已失效，正在跳转登录页...');
+                    setTimeout(function () { top.location.href = '/admin/login.html'; }, 800);
+                } else {
+                    layer.msg('导出失败(' + xhr.status + ')');
+                }
+            }
+        });
+    });
+
+    /** 以 Blob 触发文本文件下载 */
+    function saveTextFile(text, filename) {
+        var blob = new Blob([text], { type: 'text/csv;charset=utf-8;' });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url; a.download = filename;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+
+    table.on('tool(codeTable)', function (obj) {
+        var d = obj.data, e = obj.event;
+        if (e === 'void') {
+            AdminAPI.post('/admin-api/code/void', { id: d.id }, function () { table.reload('codeTable'); });
+        } else if (e === 'del') {
+            AdminAPI.del('/admin-api/code/delete', { id: d.id }, function () { obj.del(); });
+        } else if (e === 'status') {
+            form.val('statusForm', { id: d.id, status: d.status, max_uses: d.max_uses });
+            AdminAPI.open('修改状态 #' + d.id, '460px', 'auto', $('#statusBox'));
+        } else if (e === 'backfill') {
+            form.val('backfillForm', { id: d.id, code: '' });
+            AdminAPI.open('回填明文 #' + d.id + '（' + d.code_mask + '）', '520px', 'auto', $('#backfillBox'));
+        } else if (e === 'reissue') {
+            form.val('reissueForm', { id: d.id });
+            AdminAPI.open('重发新码 #' + d.id + '（' + d.code_mask + '）', '520px', 'auto', $('#reissueBox'));
+        }
+    });
+
+    // ---- 历史码回填明文：后端先校验 sha256，一致才加密存档 ----
+    form.on('submit(backfillSave)', function (obj) {
+        AdminAPI.post('/admin-api/code/backfill', obj.field, function (res) {
+            layer.closeAll();
+            layer.msg(res.msg || '已加密存档', { icon: 1 });
+            table.reload('codeTable');
+        });
+        return false;
+    });
+
+    // ---- 重置明文（重新签发）：明文只返回一次，复用生成结果的复制/下载弹窗 ----
+    form.on('submit(reissueSave)', function (obj) {
+        AdminAPI.post('/admin-api/code/reissue', obj.field, function (res) {
+            var raw = (res.data && res.data.code) || '';
+            $('#genResult').val(raw);
+            layer.closeAll();
+            AdminAPI.open('已重新签发（明文仅显示一次）', '460px', 'auto', $('#resultBox'));
+            table.reload('codeTable');
+        });
+        return false;
+    });
+
+    form.on('submit(genSave)', function (obj) {
+        AdminAPI.post('/admin-api/code/generate', obj.field, function (res) {
+            var codes = (res.data && res.data.codes) || [];
+            $('#genResult').val(codes.join('\n'));
+            layer.closeAll();
+            AdminAPI.open('生成成功（' + codes.length + ' 个）', '460px', 'auto', $('#resultBox'));
+            table.reload('codeTable');
+        });
+        return false;
+    });
+
+    // ---- 生成结果：复制 / 下载 CSV / 打印（明文只在此时可导出一次） ----
+    $('#btnCopyCodes').on('click', function () {
+        var txt = $('#genResult').val() || '';
+        if (!txt) { layer.msg('没有可导出的码'); return; }
+        var ta = document.createElement('textarea');
+        ta.value = txt; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.focus(); ta.select();
+        try { document.execCommand('copy'); layer.msg('已复制到剪贴板'); }
+        catch (e) { layer.msg('复制失败，请手动选择文本'); }
+        document.body.removeChild(ta);
+    });
+
+    $('#btnCsvCodes').on('click', function () {
+        var txt = ($('#genResult').val() || '').trim();
+        if (!txt) { layer.msg('没有可导出的码'); return; }
+        var csv = '兑换码\n' + txt;
+        var blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url; a.download = 'redemption_codes_' + Date.now() + '.csv';
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        layer.msg('CSV 已下载');
+    });
+
+    $('#btnPrintCodes').on('click', function () {
+        var txt = ($('#genResult').val() || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        if (!txt) { layer.msg('没有可导出的码'); return; }
+        var w = window.open('', '_blank');
+        w.document.write('<html><head><title>兑换码</title></head><body style="font-family:monospace;font-size:16px;line-height:2;padding:24px"><pre>' + txt + '</pre></body></html>');
+        w.document.close();
+        w.focus();
+        w.print();
+    });
+
+    form.on('submit(statusSave)', function (obj) {
+        AdminAPI.post('/admin-api/code/save', obj.field, function (res) {
+            layer.msg(res.msg || '保存成功');
+            layer.closeAll();
+            table.reload('codeTable');
+        });
+        return false;
+    });
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,26 @@
+{
+  "name": "life-story/backend",
+  "description": "回忆录系统后端 (ThinkPHP6 + MySQL + Redis/predis)",
+  "type": "project",
+  "require": {
+    "php": ">=8.1",
+    "topthink/framework": "^6.1",
+    "topthink/think-queue": "^3.0",
+    "predis/predis": "^2.0",
+    "firebase/php-jwt": "^6.4",
+    "guzzlehttp/guzzle": "^7.5"
+  },
+  "autoload": {
+    "psr-4": {
+      "app\\": "app/"
+    }
+  },
+  "config": {
+    "optimize-autoloader": true,
+    "policy": {
+      "advisories": {
+        "block": false
+      }
+    }
+  }
+}

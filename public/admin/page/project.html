@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <title>回忆录项目</title>
+    <meta name="renderer" content="webkit">
+    <link rel="stylesheet" href="/static/plugs/layui-v2.5.6/css/layui.css" media="all">
+    <link rel="stylesheet" href="/static/plugs/font-awesome-4.7.0/css/font-awesome.min.css" media="all">
+    <link rel="stylesheet" href="/static/admin/css/public.css" media="all">
+    <script src="/static/plugs/layui-v2.5.6/layui.all.js"></script>
+    <script src="/static/plugs/require-2.3.6/require.js"></script>
+    <script src="/static/config-admin.js"></script>
+    <script src="/static/admin/js/common.js"></script>
+</head>
+<body>
+<div class="layuimini-container">
+    <div class="layuimini-main">
+
+        <div class="layui-form" style="padding-top:10px">
+            <div class="layui-btn-container">
+                <div class="layui-inline">
+                    <input type="text" id="kw" placeholder="书名/传主" class="layui-input" style="width:200px;display:inline-block">
+                </div>
+                <div class="layui-inline" style="width:120px">
+                    <select id="st" lay-filter="stFilter"><option value="">全部状态</option>
+                        <option value="UNPAID_LOCKED">待解锁</option>
+                        <option value="EDITABLE">采集中</option>
+                        <option value="MAKING">回忆制作中</option>
+                        <option value="DONE">已完成</option>
+                    </select>
+                </div>
+                <button class="layui-btn layui-btn-sm layui-btn-normal" id="btnSearch"><i class="fa fa-search"></i> 搜索</button>
+                <button class="layui-btn layui-btn-sm layuimini-btn-primary" id="btnRefresh" title="刷新"><i class="fa fa-refresh"></i></button>
+            </div>
+        </div>
+
+        <table id="projTable" lay-filter="projTable"></table>
+
+        <script type="text/html" id="rowTool">
+            <a class="layui-btn layui-btn-xs layui-btn-normal" lay-event="edit">编辑</a>
+            {{# if (d.preview_url) { }}
+            <a class="layui-btn layui-btn-xs layui-btn-primary" lay-event="preview" target="_blank">预览</a>
+            {{# } }}
+            <a class="layui-btn layui-btn-xs" lay-event="export">汇出</a>
+        </script>
+
+        <div id="formBox" style="display:none;padding:20px">
+            <form class="layui-form" lay-filter="projForm">
+                <input type="hidden" name="id">
+                <div class="layui-form-item">
+                    <label class="layui-form-label">书名</label>
+                    <div class="layui-input-block"><input type="text" name="name" class="layui-input"></div>
+                </div>
+                <div class="layui-form-item">
+                    <label class="layui-form-label">传主</label>
+                    <div class="layui-input-block"><input type="text" name="real_name" class="layui-input"></div>
+                </div>
+                <div class="layui-form-item">
+                    <label class="layui-form-label">籍贯</label>
+                    <div class="layui-input-block"><input type="text" name="native_place" class="layui-input"></div>
+                </div>
+                <div class="layui-form-item layui-form-text">
+                    <label class="layui-form-label">简介</label>
+                    <div class="layui-input-block"><textarea name="description" class="layui-textarea" style="height:70px"></textarea></div>
+                </div>
+                <div class="layui-form-item">
+                    <label class="layui-form-label">状态</label>
+                    <div class="layui-input-block">
+                        <select name="status" lay-filter="statusSel">
+                            <option value="UNPAID_LOCKED">待解锁</option>
+                            <option value="EDITABLE">采集中</option>
+                            <option value="MAKING">回忆制作中</option>
+                            <option value="DONE">已完成</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="layui-form-item layui-form-text">
+                    <label class="layui-form-label">制作信息</label>
+                    <div class="layui-input-block">
+                        <textarea name="production_info" class="layui-textarea" style="height:90px" placeholder="书籍/漫剧等制作信息，如：印刷 200 册、装帧精装、漫剧 12 集等"></textarea>
+                    </div>
+                </div>
+                <div class="layui-form-item">
+                    <label class="layui-form-label">封面背景</label>
+                    <div class="layui-input-block"><input type="text" name="cover_bg" class="layui-input" placeholder="图片地址，留空则定稿时自动分配"></div>
+                </div>
+                <div class="layui-form-item">
+                    <label class="layui-form-label">预览地址</label>
+                    <div class="layui-input-block"><input type="text" name="preview_url" class="layui-input" placeholder="翻书预览地址"></div>
+                </div>
+                <div class="layui-form-item">
+                    <div class="layui-input-block"><button class="layui-btn" lay-submit lay-filter="projSave">保存</button></div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+layui.use(['table', 'form', 'layer'], function () {
+    var $ = layui.$, form = layui.form, layer = layui.layer, table = layui.table;
+
+    form.render();
+
+    function where() {
+        return { keyword: $('#kw').val() || '', status: $('#st').val() || '' };
+    }
+
+    AdminAPI.table({
+        elem: '#projTable',
+        url: '/admin-api/project/index',
+        where: where(),
+        cols: [[
+                { field: 'id', title: 'ID', width: 70 },
+                { field: 'cover_bg', title: '封面', width: 96, templet: function (d) {
+                    return d.cover_bg ? '<img src="' + d.cover_bg + '" style="height:48px;border-radius:4px;object-fit:cover">' : '-';
+                } },
+                { field: 'name', title: '书名', width: 190 },
+                { field: 'real_name', title: '传主', width: 100 },
+                { field: 'chapter_count', title: '章节数', width: 80 },
+                { field: 'status_label', title: '状态', width: 110, templet: function (d) {
+                    var map = { UNPAID_LOCKED: 'layui-bg-gray', EDITABLE: 'layui-bg-blue', MAKING: 'layui-bg-orange', DONE: 'layui-bg-green' };
+                    return '<span class="layui-badge ' + (map[d.status] || '') + '">' + d.status_label + '</span>';
+                } },
+                { field: 'production_info', title: '制作信息', minWidth: 160, templet: function (d) { return d.production_info || '-'; } },
+                { field: 'finalized_at', title: '定稿时间', width: 165, templet: function (d) { return d.finalized_at || '-'; } },
+                { title: '操作', width: 200, templet: '#rowTool', fixed: 'right' }
+            ]]
+    });
+
+    function reloadTable() { AdminAPI.reload('#projTable', where()); }
+
+    $('#btnSearch').on('click', reloadTable);
+    $('#btnRefresh').on('click', reloadTable);
+    form.on('select(stFilter)', reloadTable);
+
+    table.on('tool(projTable)', function (obj) {
+        var d = obj.data, e = obj.event;
+        if (e === 'edit') {
+            AdminAPI.get('/admin-api/project/detail', { id: d.id }, function (res) {
+                var p = res.data || {};
+                form.val('projForm', {
+                    id: p.id, name: p.name, real_name: p.real_name, native_place: p.native_place,
+                    description: p.description, status: p.status,
+                    production_info: p.production_info || '', cover_bg: p.cover_bg || '', preview_url: p.preview_url || ''
+                });
+                AdminAPI.open('编辑回忆录 #' + p.id, '620px', 'auto', $('#formBox'));
+            });
+        } else if (e === 'preview') {
+            window.open(d.preview_url);
+        } else if (e === 'export') {
+            layer.confirm('将该回忆录的背景图素材、人物基础信息、章节内容打包下载（印刷用）？', { title: '汇出印刷包' }, function (idx) {
+                layer.close(idx);
+                var load = layer.load(2, { shade: [0.2, '#fff'] });
+                AdminAPI.get('/admin-api/project/export', { id: d.id }, function (res) {
+                    layer.close(load);
+                    if (res.code === 0 && res.data && res.data.url) {
+                        window.open(res.data.url);
+                        layer.msg('汇出成功，已开始下载');
+                    } else {
+                        layer.msg(res.msg || '汇出失败');
+                    }
+                });
+            });
+        }
+    });
+
+    form.on('submit(projSave)', function (obj) {
+        AdminAPI.post('/admin-api/project/save', obj.field, function (res) {
+            layer.msg(res.msg || '保存成功');
+            layer.closeAll();
+            reloadTable();
+        });
+        return false;
+    });
+});
+</script>
+</body>
+</html>

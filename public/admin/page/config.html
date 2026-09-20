@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <title>参数设置</title>
+    <meta name="renderer" content="webkit">
+    <link rel="stylesheet" href="/static/plugs/layui-v2.5.6/css/layui.css" media="all">
+    <link rel="stylesheet" href="/static/plugs/font-awesome-4.7.0/css/font-awesome.min.css" media="all">
+    <link rel="stylesheet" href="/static/admin/css/public.css" media="all">
+    <script src="/static/plugs/layui-v2.5.6/layui.all.js"></script>
+    <script src="/static/plugs/require-2.3.6/require.js"></script>
+    <script src="/static/config-admin.js"></script>
+    <script src="/static/admin/js/common.js"></script>
+</head>
+<body>
+<div class="layuimini-container">
+    <div class="layuimini-main">
+        <blockquote class="layui-elem-quote">
+            站点参数：翻书预览页的自动翻页间隔、尾页结束文案与公司信息（公司信息展示在预览页页脚）。
+        </blockquote>
+
+        <div style="max-width:640px;padding:20px 10px">
+            <form class="layui-form" lay-filter="configForm">
+                <div class="layui-form-item">
+                    <label class="layui-form-label">站点名称</label>
+                    <div class="layui-input-block">
+                        <input type="text" name="app_name" class="layui-input" placeholder="浏览器标题，如：人生回忆录">
+                    </div>
+                </div>
+
+                <div class="layui-form-item">
+                    <label class="layui-form-label">自动翻页</label>
+                    <div class="layui-input-inline" style="width:140px">
+                        <input type="number" name="preview_auto_flip_seconds" min="0" max="3600" class="layui-input">
+                    </div>
+                    <div class="layui-form-mid layui-word-aux">秒/页；填 0 表示关闭自动翻页</div>
+                </div>
+
+                <fieldset class="layui-elem-field layui-field-title" style="margin-top:24px"><legend>尾页结束文案（翻书预览最后一页）</legend></fieldset>
+
+                <div class="layui-form-item layui-form-text">
+                    <label class="layui-form-label">结束文案</label>
+                    <div class="layui-input-block">
+                        <textarea name="preview_end_text" class="layui-textarea" rows="4" style="min-height:96px" placeholder="第一行为大标题，其余行作为正文（可换行）。留空则不显示尾页。"></textarea>
+                        <div class="layui-form-mid layui-word-aux">示例：感谢欣赏（换行）一页页翻过的是岁月，留下的是牵挂。</div>
+                    </div>
+                </div>
+
+                <fieldset class="layui-elem-field layui-field-title" style="margin-top:24px"><legend>公司信息（预览页页脚展示）</legend></fieldset>
+
+                <div class="layui-form-item">
+                    <label class="layui-form-label">公司名称</label>
+                    <div class="layui-input-block"><input type="text" name="company_name" class="layui-input" placeholder="选填"></div>
+                </div>
+                <div class="layui-form-item">
+                    <label class="layui-form-label">公司邮箱</label>
+                    <div class="layui-input-block"><input type="text" name="company_email" class="layui-input" placeholder="选填"></div>
+                </div>
+                <div class="layui-form-item">
+                    <label class="layui-form-label">客服电话</label>
+                    <div class="layui-input-block"><input type="text" name="service_phone" class="layui-input" placeholder="选填"></div>
+                </div>
+                <div class="layui-form-item">
+                    <label class="layui-form-label">联系地址</label>
+                    <div class="layui-input-block"><input type="text" name="company_address" class="layui-input" placeholder="选填"></div>
+                </div>
+
+                <div class="layui-form-item">
+                    <div class="layui-input-block">
+                        <button class="layui-btn" lay-submit lay-filter="configSave"><i class="fa fa-save"></i> 保存设置</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+layui.use(['form', 'layer'], function () {
+    var $ = layui.$, form = layui.form, layer = layui.layer;
+
+    AdminAPI.get('/admin-api/config/index', null, function (res) {
+        var val = {};
+        (res.data && res.data.list || []).forEach(function (item) { val[item.key] = item.value; });
+        form.val('configForm', val);
+    });
+
+    form.on('submit(configSave)', function (obj) {
+        var f = obj.field, payload = {};
+        Object.keys(f).forEach(function (k) { payload[k] = f[k]; });
+        AdminAPI.post('/admin-api/config/save', { config: payload }, function (res) {
+            layer.msg(res.msg || '保存成功');
+        });
+        return false;
+    });
+});
+</script>
+</body>
+</html>

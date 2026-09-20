@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <title>兑换码日志</title>
+    <meta name="renderer" content="webkit">
+    <link rel="stylesheet" href="/static/plugs/layui-v2.5.6/css/layui.css" media="all">
+    <link rel="stylesheet" href="/static/plugs/font-awesome-4.7.0/css/font-awesome.min.css" media="all">
+    <link rel="stylesheet" href="/static/admin/css/public.css" media="all">
+    <script src="/static/plugs/layui-v2.5.6/layui.all.js"></script>
+    <script src="/static/plugs/require-2.3.6/require.js"></script>
+    <script src="/static/config-admin.js"></script>
+    <script src="/static/admin/js/common.js"></script>
+</head>
+<body>
+<div class="layuimini-container">
+    <div class="layuimini-main">
+
+        <div class="layui-tab" lay-filter="clTab">
+            <ul class="layui-tab-title">
+                <li class="layui-this">核销日志</li>
+                <li>安全锁定</li>
+            </ul>
+            <div class="layui-tab-content" style="padding:10px 0">
+                <div class="layui-tab-item layui-show">
+                    <script type="text/html" id="logToolbar">
+                        <div class="layui-btn-container">
+                            <button class="layui-btn layui-btn-sm layuimini-btn-primary" lay-event="refresh" title="刷新"><i class="fa fa-refresh"></i></button>
+                        </div>
+                    </script>
+                    <table id="logTable" lay-filter="logTable"></table>
+                </div>
+                <div class="layui-tab-item">
+                    <script type="text/html" id="lockToolbar">
+                        <div class="layui-btn-container">
+                            <button class="layui-btn layui-btn-sm layuimini-btn-primary" lay-event="refresh" title="刷新"><i class="fa fa-refresh"></i></button>
+                        </div>
+                    </script>
+                    <table id="lockTable" lay-filter="lockTable"></table>
+                    <script type="text/html" id="lockTool">
+                        <a class="layui-btn layui-btn-xs layui-btn-normal" lay-event="unlock">解封</a>
+                    </script>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+layui.use(['table', 'layer', 'element'], function () {
+    var table = layui.table, layer = layui.layer, element = layui.element;
+
+    AdminAPI.table({
+        elem: '#logTable',
+        url: '/admin-api/codelog/index',
+        toolbar: '#logToolbar',
+        cols: [[
+            { field: 'id', title: 'ID', width: 70 },
+            { field: 'code_mask', title: '码号', width: 120 },
+            { field: 'nickname', title: '用户', width: 120 },
+            { field: 'project_name', title: '项目', width: 150 },
+            { field: 'method_text', title: '方式', width: 90 },
+            { field: 'device_info', title: '设备', minWidth: 120, templet: function (d) { return d.device_info || '-'; } },
+            { field: 'created_at', title: '核销时间', width: 160 }
+        ]]
+    });
+
+    AdminAPI.table({
+        elem: '#lockTable',
+        url: '/admin-api/codelog/locks',
+        toolbar: '#lockToolbar',
+        cols: [[
+            { field: 'id', title: 'ID', width: 70 },
+            { field: 'scope', title: '范围', width: 120 },
+            { field: 'user_id', title: '用户ID', width: 90 },
+            { field: 'lock_type_text', title: '类型', width: 100 },
+            { field: 'reason', title: '原因', minWidth: 140 },
+            { field: 'ttl_text', title: '剩余', width: 110 },
+            { field: 'unlocked_at', title: '解封时间', width: 150, templet: function (d) { return d.unlocked_at || '未解封'; } },
+            { field: 'created_at', title: '锁定时间', width: 160 },
+            { title: '操作', width: 90, templet: '#lockTool', fixed: 'right' }
+        ]]
+    });
+
+    table.on('toolbar(logTable)', function (obj) { if (obj.event === 'refresh') table.reload('logTable'); });
+    table.on('toolbar(lockTable)', function (obj) { if (obj.event === 'refresh') table.reload('lockTable'); });
+
+    table.on('tool(lockTable)', function (obj) {
+        if (obj.event === 'unlock') {
+            AdminAPI.post('/admin-api/codelog/unlock', { id: obj.data.id }, function () {
+                table.reload('lockTable');
+            });
+        }
+    });
+});
+</script>
+</body>
+</html>

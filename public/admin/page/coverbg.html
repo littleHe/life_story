@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <title>封面背景</title>
+    <meta name="renderer" content="webkit">
+    <link rel="stylesheet" href="/static/plugs/layui-v2.5.6/css/layui.css" media="all">
+    <link rel="stylesheet" href="/static/plugs/font-awesome-4.7.0/css/font-awesome.min.css" media="all">
+    <link rel="stylesheet" href="/static/admin/css/public.css" media="all">
+    <script src="/static/plugs/layui-v2.5.6/layui.all.js"></script>
+    <script src="/static/plugs/require-2.3.6/require.js"></script>
+    <script src="/static/config-admin.js"></script>
+    <script src="/static/admin/js/common.js"></script>
+</head>
+<body>
+<div class="layuimini-container">
+    <div class="layuimini-main">
+
+        <blockquote class="layui-elem-quote">
+            用户未上传封面时，定稿阶段会从下方图池中<strong>随机抽取一张</strong>作为回忆录封面背景。建议竖版、构图上方留白。
+        </blockquote>
+
+        <script type="text/html" id="toolbar">
+            <div class="layui-btn-container">
+                <button class="layui-btn layui-btn-sm layuimini-btn-primary" lay-event="refresh" title="刷新"><i class="fa fa-refresh"></i></button>
+                <button class="layui-btn layui-btn-sm layui-btn-normal" lay-event="add"><i class="fa fa-plus"></i> 添加背景</button>
+            </div>
+        </script>
+
+        <table id="coverBgTable" lay-filter="coverBgTable"></table>
+
+        <script type="text/html" id="rowTool">
+            <a class="layui-btn layui-btn-xs layui-btn-normal" lay-event="edit">编辑</a>
+            <a class="layui-btn layui-btn-xs layui-btn-danger" lay-event="del">删除</a>
+        </script>
+
+        <div id="formBox" style="display:none;padding:20px">
+            <form class="layui-form" lay-filter="coverBgForm">
+                <input type="hidden" name="id">
+                <div class="layui-form-item">
+                    <label class="layui-form-label">标题</label>
+                    <div class="layui-input-block"><input type="text" name="title" placeholder="如：旧相册与老照片" class="layui-input"></div>
+                </div>
+                <div class="layui-form-item">
+                    <label class="layui-form-label">背景图</label>
+                    <div class="layui-input-block">
+                        <input type="hidden" name="image" id="imageInput">
+                        <div id="uploadBtn" class="layui-btn layui-btn-sm"><i class="fa fa-upload"></i> 上传图片</div>
+                        <div id="imgPreview" style="margin-top:8px"></div>
+                    </div>
+                </div>
+                <div class="layui-form-item">
+                    <label class="layui-form-label">排序</label>
+                    <div class="layui-input-inline"><input type="number" name="sort" class="layui-input"></div>
+                    <div class="layui-form-mid">数字越大越靠前</div>
+                </div>
+                <div class="layui-form-item">
+                    <label class="layui-form-label">状态</label>
+                    <div class="layui-input-block">
+                        <input type="radio" name="status" value="1" title="启用" checked>
+                        <input type="radio" name="status" value="0" title="停用">
+                    </div>
+                </div>
+                <div class="layui-form-item">
+                    <label class="layui-form-label">备注</label>
+                    <div class="layui-input-block"><input type="text" name="remark" class="layui-input"></div>
+                </div>
+                <div class="layui-form-item">
+                    <div class="layui-input-block"><button class="layui-btn" lay-submit lay-filter="coverBgSave">保存</button></div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+layui.use(['table', 'form', 'layer', 'upload'], function () {
+    var $ = layui.$, form = layui.form, layer = layui.layer, table = layui.table, upload = layui.upload;
+
+    form.render();
+
+    AdminAPI.table({
+        elem: '#coverBgTable',
+        url: '/admin-api/coverbg/index',
+        toolbar: '#toolbar',
+        cols: [[
+            { field: 'id', title: 'ID', width: 70 },
+            { field: 'image', title: '预览', width: 110, templet: function (d) {
+                return d.image ? '<img src="' + d.image + '" style="height:56px;border-radius:4px;object-fit:cover">' : '-';
+            } },
+            { field: 'title', title: '标题', width: 180 },
+            { field: 'remark', title: '备注', minWidth: 160, templet: function (d) { return d.remark || '-'; } },
+            { field: 'sort', title: '排序', width: 80 },
+            { field: 'status', title: '状态', width: 90, templet: function (d) {
+                return d.status == 1 ? '<span class="layui-badge layui-bg-blue">启用</span>' : '<span class="layui-badge">停用</span>';
+            } },
+            { title: '操作', width: 140, templet: '#rowTool', fixed: 'right' }
+        ]]
+    });
+
+    table.on('toolbar(coverBgTable)', function (obj) {
+        var e = obj.event;
+        if (e === 'refresh') {
+            table.reload('coverBgTable');
+        } else if (e === 'add') {
+            form.val('coverBgForm', { id: '', title: '', image: '', sort: 0, status: 1, remark: '' });
+            renderPreview('');
+            AdminAPI.open('添加封面背景', '560px', 'auto', $('#formBox'));
+        }
+    });
+
+    table.on('tool(coverBgTable)', function (obj) {
+        var d = obj.data, e = obj.event;
+        if (e === 'del') {
+            AdminAPI.del('/admin-api/coverbg/delete', { id: d.id }, function () { obj.del(); });
+        } else if (e === 'edit') {
+            form.val('coverBgForm', { id: d.id, title: d.title, image: d.image, sort: d.sort, status: d.status, remark: d.remark });
+            renderPreview(d.image);
+            AdminAPI.open('编辑封面背景 #' + d.id, '560px', 'auto', $('#formBox'));
+        }
+    });
+
+    function renderPreview(src) {
+        $('#imgPreview').html(src ? '<img src="' + src + '" style="max-height:220px;border-radius:6px">' : '');
+    }
+
+    upload.render({
+        elem: '#uploadBtn',
+        url: '/admin-api/upload',
+        accept: 'images',
+        done: function (res) {
+            if (res.code === 0 && res.data) {
+                $('#imageInput').val(res.data.url);
+                renderPreview(res.data.url);
+                layer.msg('上传成功');
+            } else {
+                layer.msg(res.msg || '上传失败');
+            }
+        },
+        error: function () { layer.msg('上传出错'); }
+    });
+
+    form.on('submit(coverBgSave)', function (obj) {
+        if (!obj.field.image) { layer.msg('请先上传背景图'); return false; }
+        AdminAPI.post('/admin-api/coverbg/save', obj.field, function (res) {
+            layer.msg(res.msg || '保存成功');
+            layer.closeAll();
+            table.reload('coverBgTable');
+        });
+        return false;
+    });
+});
+</script>
+</body>
+</html>

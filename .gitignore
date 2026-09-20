@@ -1,0 +1,34 @@
+# ---------- Composer 依赖 ----------
+/vendor/
+
+# ---------- ThinkPHP 运行时（日志/缓存/会话/队列/AI worker 心跳） ----------
+/runtime/
+
+# ---------- 环境变量与密钥（绝不入库） ----------
+/.env
+/.env.local
+/.env.*.local
+# 以下为可入库的模板：.env.example / .env.clean
+
+# ---------- 构建产物 / 运行时上传内容 ----------
+/public/h5/        # 前端构建产物（由 front 构建后拷贝进 public/h5，不入库）
+/public/uploads/    # 用户上传的音频/头像/配图/导出，运行时生成
+
+# ---------- 调试残留（垃圾文件，部署前已清理） ----------
+dbg_*.html
+init_err.html
+login_err.html
+pv.html
+srv*.log
+
+# ---------- 日志 ----------
+*.log
+
+# ---------- IDE / 系统 ----------
+/.idea/
+/.vscode/
+.DS_Store
+Thumbs.db
+
+# ---------- Composer 二进制（安装时自带，不入库） ----------
+composer.phar

@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <title>背景音乐</title>
+    <meta name="renderer" content="webkit">
+    <link rel="stylesheet" href="/static/plugs/layui-v2.5.6/css/layui.css" media="all">
+    <link rel="stylesheet" href="/static/plugs/font-awesome-4.7.0/css/font-awesome.min.css" media="all">
+    <link rel="stylesheet" href="/static/admin/css/public.css" media="all">
+    <script src="/static/plugs/layui-v2.5.6/layui.all.js"></script>
+    <script src="/static/plugs/require-2.3.6/require.js"></script>
+    <script src="/static/config-admin.js"></script>
+    <script src="/static/admin/js/common.js"></script>
+</head>
+<body>
+<div class="layuimini-container">
+    <div class="layuimini-main">
+
+        <blockquote class="layui-elem-quote">
+            用户在「欣赏回忆录」页会自动播放背景音乐：系统从下方池中<strong>随机抽取一首「启用中」的音乐</strong>循环播放。
+            可上传多首（mp3 优先，建议轻音乐 / 舒缓），至少保留一首启用。
+        </blockquote>
+
+        <script type="text/html" id="toolbar">
+            <div class="layui-btn-container">
+                <button class="layui-btn layui-btn-sm layuimini-btn-primary" lay-event="refresh" title="刷新"><i class="fa fa-refresh"></i></button>
+                <button class="layui-btn layui-btn-sm layui-btn-normal" lay-event="add"><i class="fa fa-plus"></i> 添加音乐</button>
+            </div>
+        </script>
+
+        <table id="coverBgTable" lay-filter="coverBgTable"></table>
+
+        <script type="text/html" id="rowTool">
+            <a class="layui-btn layui-btn-xs layui-btn-normal" lay-event="edit">编辑</a>
+            <a class="layui-btn layui-btn-xs layui-btn-danger" lay-event="del">删除</a>
+        </script>
+
+        <div id="formBox" style="display:none;padding:20px">
+            <form class="layui-form" lay-filter="coverBgForm">
+                <input type="hidden" name="id">
+                <div class="layui-form-item">
+                    <label class="layui-form-label">标题</label>
+                    <div class="layui-input-block"><input type="text" name="title" placeholder="如：旧相册与老照片" class="layui-input"></div>
+                </div>
+                <div class="layui-form-item">
+                    <label class="layui-form-label">音频文件</label>
+                    <div class="layui-input-block">
+                        <!-- 注意：不能叫 name="file"。layui upload 会在表单内注入 <input type="file" name="file" class="layui-upload-file">，
+                             同名时 form.val() 会命中文件域并抛 InvalidStateError（弹窗根本打不开）。后端字段名仍是 file，提交时映射。 -->
+                        <input type="hidden" name="audio" id="imageInput">
+                        <div id="uploadBtn" class="layui-btn layui-btn-sm"><i class="fa fa-upload"></i> 上传音频</div>
+                        <div id="imgPreview" style="margin-top:8px"></div>
+                    </div>
+                </div>
+                <div class="layui-form-item">
+                    <label class="layui-form-label">排序</label>
+                    <div class="layui-input-inline"><input type="number" name="sort" class="layui-input"></div>
+                    <div class="layui-form-mid">数字越大越靠前</div>
+                </div>
+                <div class="layui-form-item">
+                    <label class="layui-form-label">状态</label>
+                    <div class="layui-input-block">
+                        <input type="radio" name="status" value="1" title="启用" checked>
+                        <input type="radio" name="status" value="0" title="停用">
+                    </div>
+                </div>
+                <div class="layui-form-item">
+                    <label class="layui-form-label">备注</label>
+                    <div class="layui-input-block"><input type="text" name="remark" class="layui-input"></div>
+                </div>
+                <div class="layui-form-item">
+                    <div class="layui-input-block"><button class="layui-btn" lay-submit lay-filter="coverBgSave">保存</button></div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+layui.use(['table', 'form', 'layer', 'upload'], function () {
+    var $ = layui.$, form = layui.form, layer = layui.layer, table = layui.table, upload = layui.upload;
+
+    form.render();
+
+    AdminAPI.table({
+        elem: '#coverBgTable',
+        url: '/admin-api/bgm/index',
+        toolbar: '#toolbar',
+        cols: [[
+            { field: 'id', title: 'ID', width: 70 },
+            { field: 'file', title: '预览', width: 110, templet: function (d) {
+                return d.file ? '<audio controls preload="none" src="' + d.file + '" style="height:32px;width:200px"></audio>' : '-';
+            } },
+            { field: 'title', title: '标题', width: 180 },
+            { field: 'remark', title: '备注', minWidth: 160, templet: function (d) { return d.remark || '-'; } },
+            { field: 'sort', title: '排序', width: 80 },
+            { field: 'status', title: '状态', width: 90, templet: function (d) {
+                return d.status == 1 ? '<span class="layui-badge layui-bg-blue">启用</span>' : '<span class="layui-badge">停用</span>';
+            } },
+            { title: '操作', width: 140, templet: '#rowTool', fixed: 'right' }
+        ]]
+    });
+
+    table.on('toolbar(coverBgTable)', function (obj) {
+        var e = obj.event;
+        if (e === 'refresh') {
+            table.reload('coverBgTable');
+        } else if (e === 'add') {
+            // 只回填普通字段；音频地址单独设置，避免 form.val 触碰到文件域
+            form.val('coverBgForm', { id: '', title: '', sort: 0, status: 1, remark: '' });
+            $('#imageInput').val('');
+            renderPreview('');
+            AdminAPI.open('添加背景音乐', '560px', 'auto', $('#formBox'));
+        }
+    });
+
+    table.on('tool(coverBgTable)', function (obj) {
+        var d = obj.data, e = obj.event;
+        if (e === 'del') {
+            AdminAPI.del('/admin-api/bgm/delete', { id: d.id }, function () { obj.del(); });
+        } else if (e === 'edit') {
+            form.val('coverBgForm', { id: d.id, title: d.title, sort: d.sort, status: d.status, remark: d.remark });
+            $('#imageInput').val(d.file || '');
+            renderPreview(d.file);
+            AdminAPI.open('编辑背景音乐 #' + d.id, '560px', 'auto', $('#formBox'));
+        }
+    });
+
+    function renderPreview(src) {
+        $('#imgPreview').html(src ? '<audio controls src="' + src + '" style="width:100%"></audio>' : '');
+    }
+
+    upload.render({
+        elem: '#uploadBtn',
+        url: '/admin-api/upload',
+        accept: 'audio',
+        done: function (res) {
+            if (res.code === 0 && res.data) {
+                $('#imageInput').val(res.data.url);
+                renderPreview(res.data.url);
+                layer.msg('上传成功');
+            } else {
+                layer.msg(res.msg || '上传失败');
+            }
+        },
+        error: function () { layer.msg('上传出错'); }
+    });
+
+    // layui 注入的文件域与后端字段同名（file），去掉 name 避免被 submit 收集成空值覆盖真实地址
+    $('#uploadBtn').closest('.layui-input-block').find('input.layui-upload-file').removeAttr('name');
+
+    form.on('submit(coverBgSave)', function (obj) {
+        var url = $('#imageInput').val();
+        if (!url) { layer.msg('请先上传音频文件'); return false; }
+        // 显式组装 payload：后端字段名是 file，表单里叫 audio（避开文件域同名冲突）
+        AdminAPI.post('/admin-api/bgm/save', {
+            id: obj.field.id,
+            title: obj.field.title,
+            file: url,
+            sort: obj.field.sort,
+            status: obj.field.status,
+            remark: obj.field.remark
+        }, function (res) {
+            layer.msg(res.msg || '保存成功');
+            layer.closeAll();
+            table.reload('coverBgTable');
+        });
+        return false;
+    });
+});
+</script>
+</body>
+</html>
