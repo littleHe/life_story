@@ -48,11 +48,6 @@ php think run                 # 内置服务器，默认 http://127.0.0.1:8000
 php think queue:work --queue ai
 ```
 
-> **常见问题**
-> - `composer: 不是内部或外部命令` → 没有全局 composer。改用 phpstudy 目录里的 `composer.phar`：`php composer.phar install`（phpstudy 自带，路径如 `D:\phpstudy_pro\Extensions\php\php8.2.9nts\composer.phar`）。
-> - `Allowed memory size ... exhausted` → 加 `-d memory_limit=-1`。
-> - `Composer 2 才支持` / 老版本报错 → 先 `php composer.phar self-update` 升级到 v2。
-> - `Script @php think service:discover ... returned error code 1` → 已将该步骤移出 composer 自动脚本（见上），请改为装完后手动执行 `php think service:discover`，并确保已 `cp .env.example .env`。
 
 ## 核心设计落地
 1. **频率限制 + 用户锁定**：`config/ratelimit.php` 配置阈值；`RateLimitLock` 中间件用 Redis+Lua 原子计数（IP 全局 / 用户全局 / 路由 scope）。超限返回 `429`（带 `Retry-After`），已锁定返回 `423`。
@@ -61,9 +56,3 @@ php think queue:work --queue ai
 4. **微信登录**：H5 公众号网页授权 `code` → 后端换 `unionid` → 发 JWT（access 15min + refresh 7d 存 Redis 可吊销）。**注意**：unionid 需公众号绑定微信开放平台；否则回退 openid 作主键（单端可用）。
 5. **AI 异步**：ASR/润色/配图/配音全部 `AiTaskService::push` 入 think-queue，Worker(`AiJob`) 调用云厂商 HTTP API（Guzzle），仅定稿时生成一次配音。云 API 调用为占位 TODO，按实际厂商替换。
 
-## 待补（下一轮）
-- 前端 Vue3 API 客户端 + 锁定页组件
-- 云 AI 各厂商具体调用（ASR/LLM/文生图/声音克隆+TTS）
-- OSS/COS 分片直传 + 回调校验
-- 后台 EasyAdmin 菜单接入（兑换码/审计/AI 参数）
-- 导出 PDF 图文册（视频合成二期）

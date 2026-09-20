@@ -32,3 +32,5 @@ Thumbs.db
 
 # ---------- Composer 二进制（安装时自带，不入库） ----------
 composer.phar
+ADMIN_BACKEND_FIX.md
+ADMIN_FRONTEND_FIX.md
