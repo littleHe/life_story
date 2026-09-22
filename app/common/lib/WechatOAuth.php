@@ -2,6 +2,7 @@
 namespace app\common\lib;
 
 use think\facade\Config;
+use think\facade\Log;
 use GuzzleHttp\Client;
 
 /**
@@ -24,7 +25,13 @@ class WechatOAuth
         ]);
         $r1 = json_decode((string) $http->get($tokenUrl)->getBody(), true);
         if (empty($r1['access_token'])) {
-            throw new \RuntimeException($r1['errmsg'] ?? 'wechat token fail');
+            // 带上 errcode 一起抛出：40163=code 已被使用、40029=code 无效、
+            // 40125=appsecret 错、40013=appid 错。前端会把这段原文透出到错误提示里，
+            // 线上排查不必再靠猜（此前只给 errmsg，`invalid code` 分不清是失效还是被复用）。
+            $ec = (string) ($r1['errcode'] ?? '');
+            $em = (string) ($r1['errmsg'] ?? 'wechat token fail');
+            Log::error('[wechat-oauth] code 换 token 失败: ' . trim($ec . ' ' . $em));
+            throw new \RuntimeException(trim($ec . ' ' . $em));
         }
 
         $userUrl = 'https://api.weixin.qq.com/sns/userinfo?' . http_build_query([

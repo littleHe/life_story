@@ -50,6 +50,22 @@ location /h5/ {
     try_files $uri $uri/ /h5/index.html;
 }
 ```
+- ⚠️ **2026-09-22 线上实测：这条规则实际没配上**。表现：直接访问或刷新 `/h5/任意子路由` 返回
+  `{"code":500,"msg":"controller not exists:app\\controller\\H5Controller ..."}` ——
+  请求被 ThinkPHP 当成 `/h5/login` 路由去解析控制器了。
+  宝塔操作路径：**网站 → 设置 → 配置文件**，把上面的 `location` 粘进 `server {}` 后保存（宝塔自动 reload）。
+  验证：`curl -s -o /dev/null -w '%{http_code}\n' http://域名/h5/login` 应返回 `200`（当前返回 200 但 body 是那段 500 JSON）。
+
+### 3.1 根目录 `/` 自动跳转到 `/h5/`
+访问 `http://域名`（不带路径）时直接落到 H5 应用，在 `server {}` 内加一条**精确匹配根路径**的重定向（与 `location /h5/ {}` 并列）：
+```nginx
+location = / {
+    return 301 /h5/;
+}
+```
+- ⚠️ 必须用 `location = /`（精确匹配），只命中根路径；**不要**写成 `location /`（前缀匹配），否则会把 `/api`、`/h5`、`/admin`、`/uploads` 等一并吞掉导致后端全挂。
+- 调试期怕浏览器缓存 301，可临时用 `return 302 /h5/;`，确认无误再改回 301。
+- 验证：`curl -s -o /dev/null -w '%{http_code} %{redirect_url}\n' http://域名/` 应返回 `301 http://域名/h5/`。
 
 ## 4. 异步任务（AI 生成 / think-queue）
 定稿后的增值任务（配图 / 朗读 / 封面 / 声音复刻）由 think-queue + 自定义 worker 执行。
@@ -171,3 +187,60 @@ AI_SSL_CA=
       OR preview_url LIKE 'http://localhost%';
   ```
   自检：`php tests/_check_site_url.php`（可选传参模拟线上域名：`php tests/_check_site_url.php https://你的域名`）。
+
+## 10. 线上实测故障清单（2026-09-22 实测于 life-story.future-healthy.com）
+
+> 全部由 curl / 浏览器实测确认，按「现象 → 证据 → 处置」列出。
+
+### 10.1 登录页死循环 → 414 Request-URI Too Large（已修，需重新上传 /h5/）
+
+- **现象**：未登录打开 `/h5/` 或点登录，地址栏开始疯狂跳转，最终 nginx 返回 414；浏览器标签卡死。
+- **实测证据**：地址栏出现
+  `http://域名/h5/h5/login?from=%2Fh5%2Flogin%3Ffrom%3D%252Fh5%252Flogin%253Ffrom%253D...`
+  ——注意是 **`/h5/h5/login`**（`/h5` 拼了两次），且 `from` 里套着上一轮完整 URL（`%2F`→`%252F` 逐轮再编码），长度翻倍增长。
+- **根因**：`react-router` 会自动把 basename（= `/h5`）拼到 `to` / `navigate` 上
+  （内部 `useHref` → `joinPaths([basename, pathname])`，本仓库实测 react-router-dom 7.18）。
+  代码里又用 `appPath('/login')` 手工拼了一次 → 实际跳到 `/h5/h5/login`，
+  该路径匹配不到 `login` 路由，只会落进 `RequireAuth` 包住的 `path="*"` 兜底路由，
+  于是守卫再次重定向；`from` 每轮把上一轮 URL 再编码一层 → URL 指数膨胀 → 414。
+  本地 dev（basename=`/`）不会复现，因此只在线上暴露。
+- **修复（已提交，需重新构建上传 `front` → `backend/public/h5`）**：
+  - `RequireAuth.tsx`：`<Navigate to={'/login?from=...'}>`（不再用 `appPath`），且已在登录页时不再重定向；
+  - `lib/api.ts`：新增 `LOGIN_ROUTE` / `normalizeFrom` / `captureFrom` / `currentRoute`，
+    `redirectToLogin()` 先剥 basename 再判断「是否已在登录页」，并清掉嵌套的 `from`、限制长度；
+  - `ProfilePage.tsx`：退出登录改 `navigate(LOGIN_ROUTE)`。
+- **铁律**：`to` / `navigate()` / `<Link>` 只用**不含 basename 的路由路径**（如 `/login`）；
+  只有 `window.location`、微信 `redirect_uri` 这类**裸 URL** 才用 `appPath()`。
+
+### 10.2 直接访问 /h5/ 子路由 500
+
+见 §3 实测说明（缺 `/h5/` 的 nginx SPA 回退）。
+
+### 10.3 测试登录接口对公网开放
+
+`GET /api/auth/wechat/config` 线上返回 `test_login:true`（`AuthController` 判定 `env('APP_ENV') !== 'production'`），
+意味着 `/api/auth/test/login` 任何人可调、直接拿到某个账号的 token。
+→ `.env` 必须设 `APP_ENV=production`（配套 `APP_DEBUG=false`），改完即生效、无需重启。
+
+### 10.4 该域名的 HTTPS 落到了别的站点
+
+实测：
+
+```bash
+curl -s http://域名/api/auth/wechat/config     # → {"code":0,...,"enabled":true,"appid":"wx4ee0..."} 正常
+curl -s https://域名/api/auth/wechat/config    # → 404 Not Found (nginx)
+curl -s https://域名/h5/                       # → 返回另一个站点（标题不是「人生回忆录」）
+```
+
+且 curl 报 `schannel: SEC_E_WRONG_PRINCIPAL`（证书主机名与请求域名不一致）。
+即 **443 上目前没有本站的 server 块/证书**，HTTPS 请求由同服务器其它站点接管。
+→ 宝塔给本站申请并部署 SSL（Let's Encrypt 或自有证书），确认无其它站点占用同一 `server_name`；
+开启「强制 HTTPS」后，微信授权回跳（`redirect_uri` 取 `window.location.origin`）才会稳定回到本站。
+> 用户实测踩坑点：在 HTTPS 下打开会进到别的站点，那个站点的登录页自己也有 `?from=` 重定向逻辑，
+> 两件事叠在一起更容易误判成「本站登录坏了」。先确认 HTTPS 打开的是本站，再排查登录。
+
+### 10.5 微信「网页授权域名」校验文件位置
+
+站点根是 `backend/public`，校验文件必须能被 `https://域名/MP_verify_xxx.txt` 访问到。
+→ `MP_verify_*.txt` 放到 `backend/public/` 下（不是 `backend/`，也不是 `backend/public/h5/`），再回公众号后台点校验。
+
