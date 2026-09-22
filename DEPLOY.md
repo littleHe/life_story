@@ -67,30 +67,75 @@ location /h5/ {
 - 验证端点：`GET /api/auth/wechat/config` 返回 `{enabled:true, appid, scope}`（未配 appid/secret 时为 `false`）。
 
 ## 6. .env 生产关键项
+
+> 键名以 `.env.example` 为准（已与实际代码逐一对齐）。最省事的做法：
+> `cp .env.example .env`，然后只改下面标 ⚠️ 的几项。
+
 ```dotenv
+# ---- 基础 ----
 APP_ENV=production
 APP_DEBUG=false
-DATABASE_HOST=...
-DATABASE_NAME=life_story
-DATABASE_USER=...
-DATABASE_PASSWORD=...
+# ⚠️ 站点正式域名（生成预览地址等绝对链接用）。不填会回落「当前请求域名」，
+#    只在「后台与前台同域名访问」时才正确；填上最稳。例：https://hsm.your-domain.com
+APP_URL=
 
-WECHAT_APPID=真实公众号AppID
-WECHAT_SECRET=真实公众号AppSecret
+# ---- 数据库 ----
+# ⚠️ DB_PREFIX 必须留空！代码里表名写的是 ls_project 这种全名，
+#    填了 ls_ 会拼成 ls_ls_project，全站立刻 500。
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_NAME=life_story
+DB_USER=
+DB_PASS=
+DB_PREFIX=
+
+# ---- 登录 / 加密 ----
+JWT_SECRET=至少32位随机串
+CODE_CIPHER_KEY=兑换码明文加密密钥，AES-256-CBC，改动后旧码无法解密
+
+# ---- 微信真实网页授权 ----
+WECHAT_APPID=
+WECHAT_SECRET=
 WECHAT_SCOPE=snsapi_userinfo
 
-JWT_SECRET=至少32位随机串
-CODE_CIPHER_KEY=兑换码加解密密钥（须与生成端一致）
+# ---- AI（AI_MOCK=false 才会真调第三方；配不全不会报错，会静默退回 mock）----
+# ⚠️ AI_LLM_KEY 缺失时润色会「静默」变成 mock 文案，页面照样出字，务必填。
+AI_MOCK=false
+AI_LLM_API=https://api.deepseek.com/chat/completions
+AI_LLM_KEY=
+AI_LLM_MODEL=deepseek-chat
+AI_GUIDANCE_API=https://api.deepseek.com/chat/completions
+AI_GUIDANCE_KEY=
+AI_GUIDANCE_MODEL=deepseek-chat
 
-# AI 能力（按需填写，留空则静默走兜底/mock）
-AI_LLM_API_KEY / AI_LLM_BASE_URL / AI_LLM_MODEL
-AI_GUIDANCE_*
-AI_IMAGE_*           # 腾讯混元生图走 aiart 产品线
-AI_ASR_TENCENT_APPID / SECRET_ID / SECRET_KEY
-AI_TTS_*             # 音色 501006 男 / 601010 女
-AI_VRS_ENABLED=0     # 声音复刻默认关，未开通不阻塞交付
-AI_SSL_CA=/path/to/cacert.pem   # HTTPS 报证书错时填
+AI_ASR_DRIVER=tencent
+AI_ASR_TENCENT_APPID=
+AI_ASR_TENCENT_SECRET_ID=
+AI_ASR_TENCENT_SECRET_KEY=
+AI_ASR_TENCENT_ENGINE=16k_zh
+
+# 配图：产品线固定 aiart，地域必须 ap-guangzhou（凭证复用上面的腾讯云密钥）
+AI_IMAGE_TENCENT_PRODUCT=aiart
+AI_IMAGE_TENCENT_REGION=ap-guangzhou
+
+# 朗读：需先在语音合成控制台领免费资源包，否则一律 PkgExhausted
+AI_TTS_VOICE_MALE=501006
+AI_TTS_VOICE_FEMALE=601010
+# 声音复刻默认关，未开通不阻塞交付
+AI_VRS_ENABLED=0
+
+# 一般不用填，留空会自动探测 runtime/ca/cacert.pem
+AI_SSL_CA=
 ```
+
+> ⚠️ 上面示例把说明写在**独立行**，这是刻意的：`.env` 里**不能写行内注释**（`KEY=value  # 说明` 会让值变成 `value # 说明`）。真实 `.env` 请照此格式。
+
+> ⚠️ **改 `.env` 前必读：两条会让整份配置静默失效的坑**
+> 1. **行内注释无效**：`KEY=value  # 说明` 里的说明会被当成值的一部分（`KEY` 的值变成 `value # 说明`）。注释必须**独立成行**、以 `#` 开头。
+> 2. **ASCII 保留字符会让整份 `.env` 解析失败**：半角圆括号、单双引号、竖线、与号、波浪号、感叹号、方括号、花括号、脱字符、美元符、问号 —— 出现在**注释里也算**。一旦命中，`parse_ini_file` 返回 `false`，框架把整个文件当空处理，**所有环境变量一起消失**，页面却不报错（只是悄悄退回默认值，例如 AI 变 mock、数据库连默认库）。
+>    自检命令：`php tests/_check_env.php`（会报语法是否正常、并列出实际读到的值）。
+>    本仓库 `.env.example` 已按此规则书写，可放心 `cp`。
+
 
 ## 7. 上线前数据清理与初始化
 - 清空测试数据 + 关联文件：`php think ls:reset --force`（默认 dry-run，加 `--force` 才真执行；会自动 `mysqldump` 备份到 `runtime/db_backup/`）。
@@ -105,6 +150,7 @@ AI_SSL_CA=/path/to/cacert.pem   # HTTPS 报证书错时填
 - [ ] 后台录入兑换码后，前端用码可解锁创建。
 - [ ] 新建回忆录默认出生日期 `1945-08-15`。
 - [ ] 定稿后任务在 5 分钟内被 `ai:rescue` 接管并生成（看 `runtime/ai-work.log`）。
+- [ ] 后台项目列表点「预览」打开的是**线上域名**而不是 `127.0.0.1:9411`（见 §9 最后一条）。
 
 ## 9. 常见坑
 - 本地调试后端必须用 **9411** 端口，否则 `WSAEACCES`；线上由 web 服务器处理，无需此端口。
@@ -112,3 +158,16 @@ AI_SSL_CA=/path/to/cacert.pem   # HTTPS 报证书错时填
 - 前端 dev 走 8001 + vite 代理到 9411；线上 base 由 `CLIENT_BASE_PATH=/h5` 决定。
 - 若更换微信网页授权域名，旧授权 token 失效属正常，重新授权即可。
 - `.gitignore` 已忽略 `vendor/`、`runtime/`、`.env`、`public/uploads/`、`public/h5/` 等，勿误提交密钥与构建产物。
+  ⚠️ `.gitignore` **不支持行内注释**（`/path/  # 说明` 会让整条规则失效）。注释必须独立成行，这条已被静默坑过一次。
+- **后台「预览」跳到 `http://127.0.0.1:9411/...`**：`ls_project.preview_url` 是定稿时写入库的绝对地址，
+  本地定稿就会把本机地址写进去，导到线上必然打不开。已由 `app/service/SiteUrlService.php` 处理：
+  - 生成时优先用 `.env` 的 `APP_URL`，未配才回落当前请求域名；
+  - 展示时（后台列表、后台详情、前台详情）把库里的回环地址（`127.0.0.1`/`localhost`/`0.0.0.0`/`::1`）自动重建为当前站点地址。
+  **所以历史脏数据不改库也能正常预览**；若想让库里也干净，可选执行：
+  ```sql
+  UPDATE ls_project
+     SET preview_url = REPLACE(preview_url, 'http://127.0.0.1:9411', 'https://你的域名')
+   WHERE preview_url LIKE 'http://127.0.0.1%'
+      OR preview_url LIKE 'http://localhost%';
+  ```
+  自检：`php tests/_check_site_url.php`（可选传参模拟线上域名：`php tests/_check_site_url.php https://你的域名`）。

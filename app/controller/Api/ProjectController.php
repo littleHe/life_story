@@ -7,6 +7,7 @@ use app\service\AiGatewayService;
 use app\service\AiTaskService;
 use app\service\ChapterIllustrationService;
 use app\service\RedemptionService;
+use app\service\SiteUrlService;
 use app\service\TencentVrsService;
 use app\service\VoiceService;
 use think\facade\Db;
@@ -38,6 +39,11 @@ class ProjectController extends BaseController
         }
         foreach ($list as &$p) {
             $p['chapter_count'] = $counts[(string) $p['id']] ?? 0;
+            $p['preview_url']   = SiteUrlService::healPreview(
+                $p['preview_url'] ?? '',
+                (string) ($p['preview_token'] ?? ''),
+                (string) $this->request->domain()
+            );
         }
         unset($p);
 
@@ -230,6 +236,13 @@ class ProjectController extends BaseController
         if (!$project) {
             throw new ApiException(40401, '项目不存在', 404);
         }
+        // 预览地址自愈：库里若存的是 127.0.0.1/localhost（本地定稿写入的历史数据），
+        // 按当前站点域名重建，避免线上「预览」跳到打不开的本机地址。
+        $project['preview_url'] = SiteUrlService::healPreview(
+            $project['preview_url'] ?? '',
+            (string) ($project['preview_token'] ?? ''),
+            (string) $this->request->domain()
+        );
         return $this->ok($project);
     }
 
@@ -374,7 +387,9 @@ class ProjectController extends BaseController
         if ($token === '') {
             $token = bin2hex(random_bytes(12));
         }
-        $url = rtrim((string) $this->request->domain(), '/') . '/preview/' . $token;
+        // 站点根地址：优先 .env 的 APP_URL；未配置才回落当前请求域名。
+        // （不能用裸 $request->domain()：本地开发会把 127.0.0.1:9411 写进库，导到线上打不开）
+        $url = SiteUrlService::preview($token, (string) $this->request->domain());
 
         Db::name('ls_project')->where('id', $id)->update([
             'status'        => 'MAKING',

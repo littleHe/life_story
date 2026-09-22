@@ -3,6 +3,7 @@ namespace app\controller\Admin;
 
 use think\facade\Db;
 use app\service\PrintExportService;
+use app\service\SiteUrlService;
 
 /**
  * 回忆录项目管理（后台）：查看项目、录入书籍/漫剧制作信息、变更状态（如 制作中 → 已完成）
@@ -41,6 +42,13 @@ class ProjectManageController extends AdminBase
         foreach ($list as &$p) {
             $p['status_label']  = self::STATUS[$p['status']] ?? $p['status'];
             $p['chapter_count'] = $counts[(string) $p['id']] ?? 0;
+            // 预览地址自愈：历史数据里存过 http://127.0.0.1:9411/... （本地定稿写入），
+            // 后台点「预览」会跳到打不开的本机地址 → 按当前站点域名重建。
+            $p['preview_url'] = SiteUrlService::healPreview(
+                $p['preview_url'] ?? '',
+                (string) ($p['preview_token'] ?? ''),
+                (string) $this->request->domain()
+            );
         }
         unset($p);
 
@@ -56,6 +64,12 @@ class ProjectManageController extends AdminBase
             return $this->fail('项目不存在');
         }
         $p['status_label'] = self::STATUS[$p['status']] ?? $p['status'];
+        // 同 index()：编辑表单里也展示自愈后的预览地址，避免把本机地址又存回去
+        $p['preview_url'] = SiteUrlService::healPreview(
+            $p['preview_url'] ?? '',
+            (string) ($p['preview_token'] ?? ''),
+            (string) $this->request->domain()
+        );
         return $this->ok($p);
     }
 

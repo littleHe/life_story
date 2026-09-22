@@ -92,7 +92,7 @@ CREATE TABLE `ls_chapter_asset` (
   `chapter_id`  BIGINT UNSIGNED NOT NULL,
   `asset_type`  ENUM('RECORDING','TRANSCRIPT','POLISHED_TEXT','USER_IMAGE','AI_IMAGE','AUDIO_ORIGINAL','AUDIO_DUBBED') NOT NULL,
   `oss_key`     VARCHAR(512) NOT NULL DEFAULT '' COMMENT 'OSS/COS 对象 key（大文件只存 key）',
-  `meta`        JSON NULL COMMENT '附加元数据(时长/尺寸/模型/文本等)',
+  `meta`        LONGTEXT NULL COMMENT '附加元数据(时长/尺寸/模型/文本等)（5.6 兼容：原 JSON 类型）',
   `created_at`  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `idx_chapter` (`chapter_id`),
@@ -190,8 +190,8 @@ CREATE TABLE `ls_ai_task` (
   `task_type`    ENUM('ASR','POLISH','ILLUSTRATE','COVER_IMAGE','DUB','NARRATE','VOICE_CLONE') NOT NULL,
   `status`       ENUM('PENDING','RUNNING','SUCCESS','FAILED','RETRY') NOT NULL DEFAULT 'PENDING',
   `progress`     TINYINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '0-100',
-  `payload`      JSON NULL,
-  `result`       JSON NULL,
+  `payload`      LONGTEXT NULL,
+  `result`       LONGTEXT NULL,
   `error`        VARCHAR(512) NOT NULL DEFAULT '',
   `created_at`   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at`   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -216,7 +216,7 @@ CREATE TABLE `jobs` (
   `available_time` INT UNSIGNED NOT NULL DEFAULT 0,
   `create_time`    INT UNSIGNED NOT NULL DEFAULT 0,
   PRIMARY KEY (`id`),
-  KEY `idx_queue` (`queue`),
+  KEY `idx_queue` (`queue`(191)),
   KEY `idx_reserve` (`reserve_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='队列任务（think-queue yunwuxin 版：列名为 reserve_time/available_time/create_time）';
 
