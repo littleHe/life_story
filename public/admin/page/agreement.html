@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <title>用户协议与隐私政策</title>
+    <meta name="renderer" content="webkit">
+    <link rel="stylesheet" href="/static/plugs/layui-v2.5.6/css/layui.css" media="all">
+    <link rel="stylesheet" href="/static/plugs/font-awesome-4.7.0/css/font-awesome.min.css" media="all">
+    <link rel="stylesheet" href="/static/admin/css/public.css" media="all">
+    <script src="/static/plugs/layui-v2.5.6/layui.all.js"></script>
+    <script src="/static/plugs/require-2.3.6/require.js"></script>
+    <script src="/static/config-admin.js"></script>
+    <script src="/static/admin/js/common.js"></script>
+</head>
+<body>
+<div class="layuimini-container">
+    <div class="layuimini-main">
+        <blockquote class="layui-elem-quote">
+            登录页「用户协议 / 隐私政策」正文维护。保存后，用户在微信授权登录前可点击查看并需勾选同意。
+        </blockquote>
+
+        <div style="max-width:820px;padding:20px 10px">
+            <form class="layui-form" lay-filter="agreementForm">
+
+                <fieldset class="layui-elem-field layui-field-title" style="margin-top:8px"><legend>用户协议</legend></fieldset>
+                <div class="layui-form-item">
+                    <label class="layui-form-label">标题</label>
+                    <div class="layui-input-block">
+                        <input type="text" name="user_title" class="layui-input" placeholder="如：用户协议">
+                    </div>
+                </div>
+                <div class="layui-form-item layui-form-text">
+                    <label class="layui-form-label">正文</label>
+                    <div class="layui-input-block">
+                        <textarea name="user_content" class="layui-textarea" rows="14" style="min-height:260px" placeholder="支持纯文本，换行即分段。"></textarea>
+                    </div>
+                </div>
+
+                <fieldset class="layui-elem-field layui-field-title" style="margin-top:24px"><legend>隐私政策</legend></fieldset>
+                <div class="layui-form-item">
+                    <label class="layui-form-label">标题</label>
+                    <div class="layui-input-block">
+                        <input type="text" name="privacy_title" class="layui-input" placeholder="如：隐私政策">
+                    </div>
+                </div>
+                <div class="layui-form-item layui-form-text">
+                    <label class="layui-form-label">正文</label>
+                    <div class="layui-input-block">
+                        <textarea name="privacy_content" class="layui-textarea" rows="14" style="min-height:260px" placeholder="支持纯文本，换行即分段。"></textarea>
+                    </div>
+                </div>
+
+                <div class="layui-form-item">
+                    <div class="layui-input-block">
+                        <button class="layui-btn" lay-submit lay-filter="agreementSave"><i class="fa fa-save"></i> 保存</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+layui.use(['form', 'layer'], function () {
+    var $ = layui.$, form = layui.form, layer = layui.layer;
+
+    AdminAPI.get('/admin-api/agreement/index', null, function (res) {
+        var d = res.data || {};
+        var user = d.user || {}, privacy = d.privacy || {};
+        form.val('agreementForm', {
+            user_title: user.title || '',
+            user_content: user.content || '',
+            privacy_title: privacy.title || '',
+            privacy_content: privacy.content || ''
+        });
+    });
+
+    form.on('submit(agreementSave)', function (obj) {
+        var f = obj.field;
+        var payload = {
+            user:    { title: f.user_title,    content: f.user_content },
+            privacy: { title: f.privacy_title, content: f.privacy_content }
+        };
+        AdminAPI.post('/admin-api/agreement/save', payload, function (res) {
+            layer.msg(res.msg || '保存成功');
+        });
+        return false;
+    });
+});
+</script>
+</body>
+</html>

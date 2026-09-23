@@ -19,6 +19,8 @@ Route::post('api/auth/refresh', $Api . 'AuthController@refresh');
 Route::post('api/auth/test/login', $Api . 'AuthController@testLogin');
 // 公开站点信息（浏览器标题/公司信息），无需登录
 Route::get('api/site/config', $Api . 'SiteController@config');
+// 公开协议（用户协议 / 隐私政策），登录页勾选弹窗拉取，无需登录
+Route::get('api/agreement', $Api . 'AgreementController@list');
 
 // ===== 亲友免登录「访谈」录制页（凭 interview_token 访问，公开） =====
 // token 形如 bin2hex(random_bytes(16))（纯 hex），但放宽正则让任何非法 token 也路由到控制器并返回干净的 404，避免 500
@@ -168,6 +170,10 @@ Route::group('admin-api', function () use ($Admin) {
     // ---- 系统管理：站点参数 ----
     Route::get('config/index',  $Admin . 'ConfigController@index');
     Route::post('config/save',  $Admin . 'ConfigController@save');
+
+    // ---- 系统管理：用户协议与隐私政策 ----
+    Route::get('agreement/index', $Admin . 'AgreementController@index');
+    Route::post('agreement/save', $Admin . 'AgreementController@save');
 
 })->middleware(AdminAuth::class);
 
