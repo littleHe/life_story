@@ -118,15 +118,24 @@ layui.use(['table', 'form', 'layer'], function () {
                 { field: 'name', title: '书名', width: 190 },
                 { field: 'real_name', title: '传主', width: 100 },
                 { field: 'chapter_count', title: '章节数', width: 80 },
-                { field: 'gen_progress', title: '生成进度', minWidth: 210, templet: function (d) {
-                    if (!d.gen_progress) return '<span style="color:#999">-</span>';
-                    return '<span style="color:#e67700;font-size:12px">' + d.gen_progress + '</span>';
+                { field: 'ai_tasks', title: 'AI任务', width: 132, templet: function (d) {
+                    var list = d.ai_tasks || [];
+                    if (!list.length) return '<span style="color:#c2c2c2">-</span>';
+                    var html = '';
+                    for (var i = 0; i < list.length; i++) {
+                        html += '<div style="line-height:17px;font-size:12px;white-space:nowrap">'
+                              + list[i].label + '：<span style="color:' + list[i].color + '">' + list[i].status + '</span></div>';
+                    }
+                    if (d.ai_stall > 0) {
+                        html += '<div style="line-height:17px;font-size:12px;color:#f5222d">已卡 ' + d.ai_stall + ' 分钟</div>';
+                    }
+                    return html;
                 } },
                 { field: 'status_label', title: '状态', width: 110, templet: function (d) {
                     var map = { UNPAID_LOCKED: 'layui-bg-gray', EDITABLE: 'layui-bg-blue', MAKING: 'layui-bg-orange', DONE: 'layui-bg-green' };
                     return '<span class="layui-badge ' + (map[d.status] || '') + '">' + d.status_label + '</span>';
                 } },
-                { field: 'production_info', title: '制作信息', minWidth: 160, templet: function (d) { return d.production_info || '-'; } },
+                { field: 'production_info', title: '制作信息', minWidth: 130, templet: function (d) { return d.production_info || '-'; } },
                 { field: 'finalized_at', title: '定稿时间', width: 165, templet: function (d) { return d.finalized_at || '-'; } },
                 { title: '操作', width: 200, templet: '#rowTool', fixed: 'right' }
             ]]

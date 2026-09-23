@@ -40,24 +40,20 @@ class ProjectManageController extends AdminBase
             }
         }
 
-        // 一次性补齐「生成进度」：汇总每个项目仍处于非终态的 AI 任务（PENDING/RUNNING/RETRY），
-        // 让后台能直接看到「卡在制作中的项目，到底差哪几项、卡了多久」。
-        $openByProject = [];
+        // 一次性补齐「AI 任务」：按 task_type 汇总每个项目的任务状态，供后台「AI任务」列分几行展示。
+        // 背景：项目翻「已完成」的唯一条件是「该项目已无任何 PENDING/RUNNING/RETRY 任务」，
+        // 所以把每一类任务推进到哪一步直接摆出来，卡在哪一环一眼可见。
+        $aiByProject = [];
         if ($ids) {
             $rows = Db::name('ls_ai_task')
                 ->where('project_id', 'in', $ids)
-                ->whereIn('status', ['PENDING', 'RUNNING', 'RETRY'])
                 ->field('project_id, task_type, status, updated_at')
                 ->select()
                 ->toArray();
             foreach ($rows as $r) {
-                $openByProject[(string) $r['project_id']][] = $r;
+                $aiByProject[(string) $r['project_id']][(string) $r['task_type']][] = $r;
             }
         }
-        $typeLabel = [
-            'VOICE_CLONE' => '复刻音色', 'POLISH' => '润色', 'ILLUSTRATE' => '配图',
-            'COVER_IMAGE' => '封面图', 'NARRATE' => '配音', 'ASR' => '转写', 'DUB' => '配音',
-        ];
 
         foreach ($list as &$p) {
             $p['status_label']  = self::STATUS[$p['status']] ?? $p['status'];
@@ -70,32 +66,90 @@ class ProjectManageController extends AdminBase
                 (string) $this->request->domain()
             );
 
-            // 生成进度：剩 N 项 + 类型明细 + 最早未进展时长
-            $open = $openByProject[(string) $p['id']] ?? [];
-            if ($open) {
-                $byType = [];
-                $oldest = time();
-                foreach ($open as $r) {
-                    $byType[$r['task_type']] = ($byType[$r['task_type']] ?? 0) + 1;
-                    $ts = strtotime((string) $r['updated_at']);
-                    if ($ts && $ts < $oldest) {
-                        $oldest = $ts;
-                    }
-                }
-                $parts = [];
-                foreach ($byType as $t => $c) {
-                    $parts[] = ($typeLabel[$t] ?? $t) . '×' . $c;
-                }
-                $mins = (int) floor((time() - $oldest) / 60);
-                $p['gen_progress'] = '剩 ' . count($open) . ' 项：' . implode(' / ', $parts)
-                    . ($mins > 0 ? '（卡 ' . $mins . ' 分钟）' : '（刚启动）');
-            } else {
-                $p['gen_progress'] = '';
-            }
+            // AI 任务：分类型展示推进状态（已完成 / 进行中 / 排队中 / 部分完成 / 未开始 / 失败）
+            $byType = $aiByProject[(string) $p['id']] ?? [];
+            $p['ai_tasks'] = self::buildAiTasks($byType);
+            // 仍有任务停在非终态时，给出「最久未更新」的分钟数，用于识别卡住（0 = 没有未完成任务）
+            $p['ai_stall'] = self::aiStallMinutes($byType);
         }
         unset($p);
 
         return $this->tableJson($list, $count);
+    }
+
+    /** AI 任务类型 → 后台展示名（数组顺序即列表里的展示顺序） */
+    private const AI_TYPE_LABEL = [
+        'POLISH'      => 'AI润色',
+        'COVER_IMAGE' => 'AI背景',
+        'ILLUSTRATE'  => 'AI配图',
+        'NARRATE'     => 'AI配音',
+        'VOICE_CLONE' => 'AI复刻',
+    ];
+
+    /**
+     * 汇总单个项目的 AI 任务，按类型返回「展示名 + 状态文案 + 状态色」，供后台分几行展示。
+     * - 同一类型有多条任务时（如 6 个章节各一条配音），按整体推进情况折叠成一句话；
+     * - 项目若一条 AI 任务都没有（还没定稿），返回空数组 → 前端显示 “-”。
+     */
+    private static function buildAiTasks(array $byType): array
+    {
+        $hasAny = !empty($byType);
+        $out = [];
+        foreach (self::AI_TYPE_LABEL as $key => $label) {
+            $rows = $byType[$key] ?? [];
+            if (!$rows) {
+                if ($hasAny) {
+                    $out[] = ['key' => $key, 'label' => $label, 'status' => '未开始', 'color' => '#9e9e9e'];
+                }
+                continue;
+            }
+            $n = ['run' => 0, 'wait' => 0, 'ok' => 0, 'fail' => 0];
+            foreach ($rows as $r) {
+                switch ((string) ($r['status'] ?? '')) {
+                    case 'RUNNING':
+                        $n['run']++; break;
+                    case 'PENDING':
+                    case 'RETRY':
+                        $n['wait']++; break;
+                    case 'SUCCESS':
+                    case 'SKIPPED':
+                    case 'DONE':
+                        $n['ok']++; break;
+                    case 'FAILED':
+                        $n['fail']++; break;
+                }
+            }
+            if ($n['run'] > 0) {
+                $out[] = ['key' => $key, 'label' => $label, 'status' => '进行中', 'color' => '#1890ff'];
+            } elseif ($n['wait'] > 0) {
+                $out[] = ['key' => $key, 'label' => $label, 'status' => $n['ok'] > 0 ? '部分完成' : '排队中', 'color' => '#fa8c16'];
+            } elseif ($n['fail'] > 0 && $n['ok'] > 0) {
+                $out[] = ['key' => $key, 'label' => $label, 'status' => '部分失败', 'color' => '#f5222d'];
+            } elseif ($n['fail'] > 0) {
+                $out[] = ['key' => $key, 'label' => $label, 'status' => '失败', 'color' => '#f5222d'];
+            } else {
+                $out[] = ['key' => $key, 'label' => $label, 'status' => '已完成', 'color' => '#52c41a'];
+            }
+        }
+        return $out;
+    }
+
+    /** 仍有非终态（PENDING/RUNNING/RETRY）任务时，返回最早那条的静默分钟数；没有则 0 */
+    private static function aiStallMinutes(array $byType): int
+    {
+        $oldest = 0;
+        foreach ($byType as $rows) {
+            foreach ($rows as $r) {
+                if (!in_array((string) ($r['status'] ?? ''), ['PENDING', 'RUNNING', 'RETRY'], true)) {
+                    continue;
+                }
+                $ts = strtotime((string) ($r['updated_at'] ?? ''));
+                if ($ts > 0 && ($oldest === 0 || $ts < $oldest)) {
+                    $oldest = $ts;
+                }
+            }
+        }
+        return $oldest > 0 ? (int) floor((time() - $oldest) / 60) : 0;
     }
 
     /** GET /admin-api/project/detail?id= */
