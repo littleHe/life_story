@@ -39,6 +39,26 @@ class ProjectManageController extends AdminBase
                 $counts[(string) $r['project_id']] = (int) $r['c'];
             }
         }
+
+        // 一次性补齐「生成进度」：汇总每个项目仍处于非终态的 AI 任务（PENDING/RUNNING/RETRY），
+        // 让后台能直接看到「卡在制作中的项目，到底差哪几项、卡了多久」。
+        $openByProject = [];
+        if ($ids) {
+            $rows = Db::name('ls_ai_task')
+                ->where('project_id', 'in', $ids)
+                ->whereIn('status', ['PENDING', 'RUNNING', 'RETRY'])
+                ->field('project_id, task_type, status, updated_at')
+                ->select()
+                ->toArray();
+            foreach ($rows as $r) {
+                $openByProject[(string) $r['project_id']][] = $r;
+            }
+        }
+        $typeLabel = [
+            'VOICE_CLONE' => '复刻音色', 'POLISH' => '润色', 'ILLUSTRATE' => '配图',
+            'COVER_IMAGE' => '封面图', 'NARRATE' => '配音', 'ASR' => '转写', 'DUB' => '配音',
+        ];
+
         foreach ($list as &$p) {
             $p['status_label']  = self::STATUS[$p['status']] ?? $p['status'];
             $p['chapter_count'] = $counts[(string) $p['id']] ?? 0;
@@ -49,6 +69,29 @@ class ProjectManageController extends AdminBase
                 (string) ($p['preview_token'] ?? ''),
                 (string) $this->request->domain()
             );
+
+            // 生成进度：剩 N 项 + 类型明细 + 最早未进展时长
+            $open = $openByProject[(string) $p['id']] ?? [];
+            if ($open) {
+                $byType = [];
+                $oldest = time();
+                foreach ($open as $r) {
+                    $byType[$r['task_type']] = ($byType[$r['task_type']] ?? 0) + 1;
+                    $ts = strtotime((string) $r['updated_at']);
+                    if ($ts && $ts < $oldest) {
+                        $oldest = $ts;
+                    }
+                }
+                $parts = [];
+                foreach ($byType as $t => $c) {
+                    $parts[] = ($typeLabel[$t] ?? $t) . '×' . $c;
+                }
+                $mins = (int) floor((time() - $oldest) / 60);
+                $p['gen_progress'] = '剩 ' . count($open) . ' 项：' . implode(' / ', $parts)
+                    . ($mins > 0 ? '（卡 ' . $mins . ' 分钟）' : '（刚启动）');
+            } else {
+                $p['gen_progress'] = '';
+            }
         }
         unset($p);
 

@@ -53,7 +53,19 @@ class AiTaskService
             'created_at' => date('Y-m-d H:i:s'),
         ]);
 
-        Queue::push(\app\queue\AiJob::class, ['task_id' => $taskId, 'type' => $type], self::QUEUE);
+        try {
+            Queue::push(\app\queue\AiJob::class, ['task_id' => $taskId, 'type' => $type], self::QUEUE);
+        } catch (\Throwable $e) {
+            // 入队失败：绝不能留「PENDING 但 jobs 表无对应行」的孤儿（否则项目永久卡在 MAKING）。
+            // 保持 PENDING + 记录错误，交给 ai:rescue 的「孤儿补投」逻辑重试；同时记日志便于排查。
+            // 不抛异常：让定稿链路继续，maybeCompleteProject 会因该 PENDING 任务存在而正确地保持 MAKING。
+            Db::name('ls_ai_task')->where('id', $taskId)->update([
+                'status'     => 'PENDING',
+                'error'      => '入队失败（rescue 将自动补投）：' . mb_substr($e->getMessage(), 0, 400),
+                'updated_at' => date('Y-m-d H:i:s'),
+            ]);
+            error_log('[AiTaskService] push 任务 ' . $taskId . ' 入队失败：' . $e->getMessage());
+        }
         return $taskId;
     }
 
@@ -226,23 +238,20 @@ class AiTaskService
      *
      * 这是用户问的「定期监测到已完成定稿、没结束的，再次生成」的核心实现：
      *   - 把卡在 RUNNING/RETRY 且很久没更新的任务视作已死，重置回 PENDING（并清掉残留 jobs 行防重复执行）；
-     *   - 若队列里还有任务（含延迟待执行的）且当前没有活着的 worker，则拉起一个新 worker 继续干。
+     *   - 【新增】补投「PENDING 但 jobs 表已无对应行」的孤儿任务：入队时 Queue::push 抛异常 /
+     *     rescue 重启导致 job 行丢失，这类任务永不消费 → 项目永久卡在 MAKING。60 秒保护窗避免同一次
+     *     任务被反复重投。
+     *   - 若队列里还有任务（含延迟待执行的）且当前没有活着的 worker，则拉起一个新 worker 继续干；
+     *   - 最后把「已无未终态任务」的 MAKING 项目兜底翻 DONE。
      *
      * 可由 ai:work 启动时调用（先自愈再处理），也可由 cron 周期性调用（php think ai:rescue）。
      *
-     * @return array ['requeued'=>重置并重投的任务数, 'has_jobs'=>队列剩余任务数, 'kicked'=>是否拉起了 worker]
+     * @return array ['requeued'=>重置并重投的任务数, 'has_jobs'=>队列剩余任务数, 'kicked'=>是否拉起了 worker, 'completed'=>兜底翻 DONE 的项目数]
      */
     public static function rescue(): array
     {
         $cut = date('Y-m-d H:i:s', time() - self::RESCUE_STUCK_SECONDS);
-
-        // 1) 卡死的 RUNNING/RETRY → 重置回 PENDING，并清理可能残留的 jobs 行（被 kill 时 reserved 的行）
-        $stuck = Db::name('ls_ai_task')
-            ->whereIn('status', ['RUNNING', 'RETRY'])
-            ->where('updated_at', '<', $cut)
-            ->field('id,task_type')
-            ->select()
-            ->toArray();
+        $now = time();
 
         // 取出当前队列里所有 jobs 的 payload 用于精确匹配（避免 like 误删）
         $jobRows = Db::name('jobs')->where('queue', self::QUEUE)->field('id,payload')->select()->toArray();
@@ -256,6 +265,15 @@ class AiTaskService
         }
 
         $requeued = 0;
+
+        // 1) 卡死的 RUNNING/RETRY → 重置回 PENDING，并清理可能残留的 jobs 行（被 kill 时 reserved 的行）。
+        //    同时覆盖「RUNNING/RETRY 但 jobs 表已无对应行」的孤儿（被 kill 后 job 行丢失，原逻辑也会漏）。
+        $stuck = Db::name('ls_ai_task')
+            ->whereIn('status', ['RUNNING', 'RETRY'])
+            ->where('updated_at', '<', $cut)
+            ->field('id,task_type')
+            ->select()
+            ->toArray();
         foreach ($stuck as $t) {
             $tid = (int) $t['id'];
             if (!empty($jobByTask[$tid])) {
@@ -267,18 +285,45 @@ class AiTaskService
                 'progress'   => 0,
                 'updated_at' => date('Y-m-d H:i:s'),
             ]);
-            Queue::push(\app\queue\AiJob::class, ['task_id' => $tid, 'type' => $t['task_type']], self::QUEUE);
-            $requeued++;
+            try {
+                Queue::push(\app\queue\AiJob::class, ['task_id' => $tid, 'type' => $t['task_type']], self::QUEUE);
+                $requeued++;
+            } catch (\Throwable $e) {
+                error_log('[AiTaskService] rescue 重投任务 ' . $tid . ' 失败：' . $e->getMessage());
+            }
         }
 
-        // 2) 队列里还有任务（含延迟待执行的）且没活着的 worker → 拉起
+        // 2) 「PENDING 但 jobs 表无对应行」的孤儿：入队时 Queue::push 抛异常 / rescue 重启导致 job 行丢失，
+        //    这类任务永远不会被消费 → 项目永久卡在 MAKING。60 秒保护窗避免同一次任务被反复重投。
+        $orphans = Db::name('ls_ai_task')
+            ->where('status', 'PENDING')
+            ->where('updated_at', '<', date('Y-m-d H:i:s', $now - 60))
+            ->column('id,task_type', 'id');
+        foreach ($orphans as $tid => $type) {
+            if (isset($jobByTask[$tid])) {
+                continue;   // 已有 job 行，交给队列正常消费，不重复投
+            }
+            // 刷新保护窗，避免下一轮 rescue 立刻又重投
+            Db::name('ls_ai_task')->where('id', $tid)->update(['updated_at' => date('Y-m-d H:i:s')]);
+            try {
+                Queue::push(\app\queue\AiJob::class, ['task_id' => $tid, 'type' => $type], self::QUEUE);
+                $requeued++;
+            } catch (\Throwable $e) {
+                error_log('[AiTaskService] rescue 补投孤儿任务 ' . $tid . ' 失败：' . $e->getMessage());
+            }
+        }
+
+        // 3) 队列里还有任务（含延迟待执行的）且没活着的 worker → 拉起
         $hasJobs = (int) Db::name('jobs')->where('queue', self::QUEUE)->count();
         $kicked  = false;
         if ($hasJobs > 0 && !self::workerAlive()) {
             $kicked = self::spawn();
         }
 
-        return ['requeued' => $requeued, 'has_jobs' => $hasJobs, 'kicked' => $kicked];
+        // 4) 兜底收尾：把「已无未终态任务」的 MAKING 项目翻 DONE（防止个别完成路径漏调）
+        $completed = self::completeStalledProjects();
+
+        return ['requeued' => $requeued, 'has_jobs' => $hasJobs, 'kicked' => $kicked, 'completed' => $completed];
     }
 
     /**

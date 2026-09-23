@@ -409,12 +409,21 @@ class AiJob
 
     protected function fail(Job $job, $data, string $msg, int $pid = 0)
     {
+        $type = (string) ($data['type'] ?? '');
         Db::name('ls_ai_task')->where('id', (int) ($data['task_id'] ?? 0))->update([
             'status'     => 'FAILED',
             'error'      => $msg,
             'updated_at' => date('Y-m-d H:i:s'),
         ]);
         $job->delete();
+
+        // 复刻失败 / 重试超限：必须释放 voice_status（pending/training 残留会导致
+        // 所有 NARRATE 任务一直 __retry 等「原主音色」，在各自超限前项目永远停在制作中）。
+        if ($type === 'VOICE_CLONE' && $pid > 0) {
+            Db::name('ls_project')->where('id', $pid)
+                ->whereIn('voice_status', ['pending', 'training'])
+                ->update(['voice_status' => 'failed', 'voice_task_id' => '', 'voice_label' => '']);
+        }
 
         // 进入终态 → 收尾把项目翻 DONE（会记录 finalize_failed）
         AiTaskService::maybeCompleteProject($pid);
